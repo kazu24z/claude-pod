@@ -1,0 +1,28 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DEVCONTAINER=true
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    less git curl procps sudo zsh unzip gnupg2 \
+    iptables ipset iproute2 dnsutils aggregate jq gosu ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash && \
+    cp /root/.local/bin/claude /usr/local/bin/claude
+
+# Install mise
+RUN curl https://mise.run | sh && \
+    cp /root/.local/bin/mise /usr/local/bin/mise
+
+COPY init-firewall.sh /usr/local/bin/
+COPY entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/init-firewall.sh /usr/local/bin/entrypoint.sh
+
+RUN mkdir -p /home/user
+WORKDIR /workspace
+
+# Install runtimes via mise if mise.toml exists
+COPY mise.toml* ./
+RUN if [ -f mise.toml ]; then mise install --yes; fi
