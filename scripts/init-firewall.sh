@@ -48,19 +48,8 @@ echo "Host network detected as: $HOST_NETWORK"
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT
 iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 
-# Set default policies to DROP
-iptables -P INPUT DROP
-iptables -P FORWARD DROP
-iptables -P OUTPUT DROP
-
-# Allow established connections
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-if [ "$ALLOW_WEB_ACCESS" = "true" ]; then
-    echo "Network mode: web access (HTTPS 443 open)"
-    iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
-else
+# Whitelist mode: fetch IP data BEFORE setting DROP policy
+if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
     echo "Network mode: whitelist"
 
     ipset create allowed-domains hash:net
@@ -111,7 +100,21 @@ else
             ipset add allowed-domains "$ip"
         done < <(echo "$ips")
     done
+fi
 
+# Set default policies to DROP
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT DROP
+
+# Allow established connections
+iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+if [ "$ALLOW_WEB_ACCESS" = "true" ]; then
+    echo "Network mode: web access (HTTPS 443 open)"
+    iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+else
     iptables -A OUTPUT -m set --match-set allowed-domains dst -j ACCEPT
 fi
 
