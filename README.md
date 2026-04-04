@@ -96,13 +96,13 @@ claude-pod run  # または cpod run
 
 コンテナ起動時に `iptables` / `ipset` でファイアウォールを構築します。GitHub の IP レンジは起動時に [GitHub API](https://api.github.com/meta) から動的に取得します。その他のドメインは DNS 解決した IP をホワイトリストに登録します。
 
-### web access モード
+### open モード
 
 ```bash
-claude-pod run --web  # または cpod run --web
+claude-pod run --open  # または cpod run --open
 ```
 
-上記に加えて HTTPS（443番ポート）を全開放します。Claude Code がドキュメントや外部情報を調査できるようになります。
+HTTPS（443番ポート）を全開放します。
 
 > **注意：** 任意の HTTPS 宛先への通信が可能になります。
 

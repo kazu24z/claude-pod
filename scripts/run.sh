@@ -1,12 +1,12 @@
 #!/bin/bash
-# Usage: ./run.sh /path/to/project [--web]
+# Usage: ./run.sh /path/to/project [--open]
 set -euo pipefail
 
 WEB_ACCESS="false"
 PROJECT_DIR=""
 
 for arg in "$@"; do
-    if [ "$arg" = "--web" ]; then
+    if [ "$arg" = "--open" ]; then
         WEB_ACCESS="true"
     elif [ -z "$PROJECT_DIR" ]; then
         PROJECT_DIR="$arg"

@@ -22,17 +22,17 @@ cat > "$CONFIG_FILE" << EOF
 export CLAUDE_POD_HOME="$REPO_DIR"
 claude-pod() {
   local cmd="\${1:-help}"
-  local dir="\${2:-\$(pwd)}"
+  shift 2>/dev/null || true
   case "\$cmd" in
-    setup)  "\$CLAUDE_POD_HOME/scripts/setup.sh" "\$dir" ;;
-    update) "\$CLAUDE_POD_HOME/scripts/update.sh" "\$dir" ;;
-    run)    "\$CLAUDE_POD_HOME/scripts/run.sh" "\$dir" ;;
-    build)  "\$CLAUDE_POD_HOME/scripts/build.sh" "\$dir" ;;
+    setup)  "\$CLAUDE_POD_HOME/scripts/setup.sh" "\$@" ;;
+    update) "\$CLAUDE_POD_HOME/scripts/update.sh" "\$@" ;;
+    run)    "\$CLAUDE_POD_HOME/scripts/run.sh" "\$@" ;;
+    build)  "\$CLAUDE_POD_HOME/scripts/build.sh" "\$@" ;;
     *)
-      echo "Usage: claude-pod <setup|update|run|build> [project-dir]"
+      echo "Usage: claude-pod <setup|update|run|build> [options]"
       echo "  setup  - Set up Claude Container for a project"
       echo "  update - Update existing Claude Container config"
-      echo "  run    - Run Claude Container in a project (--web to allow full HTTPS)"
+      echo "  run    - Run Claude Container in a project (--open to allow full HTTPS)"
       echo "  build  - Build Claude Container image"
       ;;
   esac
