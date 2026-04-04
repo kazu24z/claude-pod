@@ -16,10 +16,6 @@ RUN curl -fsSL https://claude.ai/install.sh | bash && \
 RUN curl https://mise.run | sh && \
     cp /root/.local/bin/mise /usr/local/bin/mise
 
-COPY init-firewall.sh /usr/local/bin/
-COPY entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/init-firewall.sh /usr/local/bin/entrypoint.sh
-
 RUN mkdir -p /home/user
 WORKDIR /workspace
 

@@ -25,7 +25,7 @@ cp "$SCRIPT_DIR/init-firewall.sh" "$TARGET_DIR/"
 cp "$SCRIPT_DIR/entrypoint.sh" "$TARGET_DIR/"
 chmod +x "$TARGET_DIR/init-firewall.sh" "$TARGET_DIR/entrypoint.sh"
 
-cat > "$TARGET_DIR/compose.yml" << 'EOF'
+cat > "$TARGET_DIR/compose.yml" << 'COMPOSE'
 services:
   claude:
     build:
@@ -34,6 +34,8 @@ services:
     volumes:
       - "${HOME}/.claude:/home/user/.claude"
       - "..:/workspace"
+      - "./init-firewall.sh:/usr/local/bin/init-firewall.sh"
+      - "./entrypoint.sh:/usr/local/bin/entrypoint.sh"
     working_dir: /workspace
     environment:
       - HOST_UID=${HOST_UID}
@@ -45,19 +47,19 @@ services:
     stdin_open: true
     tty: true
     command: /usr/local/bin/entrypoint.sh
-EOF
+COMPOSE
 
-cat > "$TARGET_DIR/mise.toml" << 'EOF'
+cat > "$TARGET_DIR/mise.toml" << 'MISE'
 [tools]
 # 必要なランタイムをここに追加
 # node = "22"
 # python = "3.12"
 # bun = "latest"
-EOF
+MISE
 
 echo "Setup complete: $TARGET_DIR"
 echo ""
 echo "次のステップ:"
 echo "  1. $TARGET_DIR/mise.toml にランタイムを追加"
-echo "  2. Web アクセスが必要なら claude-pod run --web で起動"
+echo "  2. HTTPS 全開放が必要なら claude-pod run --open で起動"
 echo "  3. cd $PROJECT_DIR && claude-pod build && claude-pod run"
