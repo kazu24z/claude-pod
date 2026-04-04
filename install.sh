@@ -17,39 +17,70 @@ fi
 
 # 専用設定ファイルを生成（上書きで常に最新）
 mkdir -p "$(dirname "$CONFIG_FILE")"
-cat > "$CONFIG_FILE" << EOF
+cat > "$CONFIG_FILE" << 'ENVEOF'
 # claude-pod: Claude Container dev environment helper
-export CLAUDE_POD_HOME="$REPO_DIR"
+export CLAUDE_POD_HOME="__REPO_DIR__"
+
+claude() {
+  local allow_web="false"
+  local project_dir
+  project_dir=$(pwd)
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --open) allow_web="true"; shift ;;
+      --)     shift; break ;;
+      -*)     echo "Unknown option: $1" >&2; return 1 ;;
+      *)      break ;;
+    esac
+  done
+
+  docker run --rm -it \
+    --cap-add NET_ADMIN \
+    --cap-add NET_RAW \
+    --mount type=bind,source="${HOME}/.claude",target=/home/user/.claude \
+    --mount type=bind,source="${project_dir}",target=/workspace \
+    --mount type=volume,source=mise-cache,target=/home/user/.local/share/mise \
+    --workdir /workspace \
+    --env HOST_UID="$(id -u)" \
+    --env HOST_GID="$(id -g)" \
+    --env ALLOW_WEB_ACCESS="${allow_web}" \
+    --entrypoint bash \
+    claude-pod:latest \
+    -c 'echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/ipset, /usr/sbin/iptables" > /etc/sudoers.d/claude-pod-network && chmod 0440 /etc/sudoers.d/claude-pod-network && /usr/local/bin/init-firewall.sh < /dev/null; export HOME=/home/user CLAUDE_CONFIG_DIR=/home/user/.claude; exec gosu ${HOST_UID}:${HOST_GID} /usr/local/bin/claude "$@"' _ "$@"
+}
+
 claude-pod() {
-  local cmd="\${1:-help}"
+  local cmd="${1:-help}"
   shift 2>/dev/null || true
-  case "\$cmd" in
-    setup)  "\$CLAUDE_POD_HOME/scripts/setup.sh" "\$@" ;;
-    update) "\$CLAUDE_POD_HOME/scripts/update.sh" "\$@" ;;
-    run)    "\$CLAUDE_POD_HOME/scripts/run.sh" "\$@" ;;
-    build)  "\$CLAUDE_POD_HOME/scripts/build.sh" "\$@" ;;
+  case "$cmd" in
+    build)  docker build -t claude-pod:latest "$CLAUDE_POD_HOME" ;;
+    update) git -C "$CLAUDE_POD_HOME" pull && docker build -t claude-pod:latest "$CLAUDE_POD_HOME" ;;
     *)
-      echo "Usage: claude-pod <setup|update|run|build> [options]"
-      echo "  setup  - Set up Claude Container for a project"
-      echo "  update - Update existing Claude Container config"
-      echo "  run    - Run Claude Container in a project (--open to allow full HTTPS)"
-      echo "  build  - Build Claude Container image"
+      echo "Usage: claude-pod <build|update>"
+      echo "  build  - Build/rebuild the global claude-pod image"
+      echo "  update - Pull latest changes and rebuild the image"
       ;;
   esac
 }
 alias cpod='claude-pod'
-EOF
+ENVEOF
+
+# REPO_DIR のプレースホルダを実際のパスに置換
+sed -i'' -e "s|__REPO_DIR__|$REPO_DIR|" "$CONFIG_FILE"
 
 # RCファイルへの読み込み行を追記（重複しない）
 SOURCE_LINE="[ -f \"$CONFIG_FILE\" ] && source \"$CONFIG_FILE\""
 if ! grep -qF "$CONFIG_FILE" "$RC_FILE" 2>/dev/null; then
-  echo "" >> "$RC_FILE"
-  echo "# claude-pod" >> "$RC_FILE"
-  echo "$SOURCE_LINE" >> "$RC_FILE"
+  { echo ""; echo "# claude-pod"; echo "$SOURCE_LINE"; } >> "$RC_FILE"
   echo "Added source line to $RC_FILE"
 else
   echo "Source line already exists in $RC_FILE"
 fi
+
+# グローバルイメージをビルド
+echo "Building claude-pod:latest..."
+docker build -t claude-pod:latest "$REPO_DIR"
 
 echo "Installed claude-pod to $CONFIG_FILE"
 echo "Run: source $RC_FILE"

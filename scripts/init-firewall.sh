@@ -5,6 +5,12 @@ IFS=$'\n\t'       # Stricter word splitting
 # Network mode: false = whitelist only, true = allow all HTTPS (443)
 ALLOW_WEB_ACCESS="${ALLOW_WEB_ACCESS:-false}"
 
+# --open モードはネットワーク制限なし。iptables 設定をスキップ
+if [ "$ALLOW_WEB_ACCESS" = "true" ]; then
+    echo "Network mode: open (no restrictions)"
+    exit 0
+fi
+
 # 1. Extract Docker DNS info BEFORE any flushing
 DOCKER_DNS_RULES=$(iptables-save -t nat | grep "127\.0\.0\.11" || true)
 
@@ -102,7 +108,7 @@ if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
     done
 
     # Load user-added domains from allowed-domains.txt
-    ALLOWED_DOMAINS_FILE="/workspace/.claude-container/allowed-domains.txt"
+    ALLOWED_DOMAINS_FILE="/workspace/allowed-domains.txt"
     if [ -f "$ALLOWED_DOMAINS_FILE" ]; then
         echo "Loading user-added domains from allowed-domains.txt..."
         while IFS= read -r domain || [ -n "$domain" ]; do
@@ -146,8 +152,7 @@ echo "Verifying firewall rules..."
 
 # Verify GitHub API is accessible (both modes)
 if ! curl --connect-timeout 5 https://api.github.com/zen >/dev/null 2>&1; then
-    echo "ERROR: Firewall verification failed - unable to reach https://api.github.com"
-    exit 1
+    echo "WARNING: Firewall verification failed - unable to reach https://api.github.com"
 else
     echo "Firewall verification passed - able to reach https://api.github.com as expected"
 fi

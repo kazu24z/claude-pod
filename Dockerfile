@@ -19,6 +19,6 @@ RUN curl https://mise.run | sh && \
 RUN mkdir -p /home/user
 WORKDIR /workspace
 
-# Install runtimes via mise if mise.toml exists
-COPY mise.toml* ./
-RUN if [ -f mise.toml ]; then mise install --yes; fi
+COPY scripts/skills/ /usr/local/share/claude-pod/skills/
+COPY scripts/init-firewall.sh /usr/local/bin/init-firewall.sh
+RUN chmod +x /usr/local/bin/init-firewall.sh
