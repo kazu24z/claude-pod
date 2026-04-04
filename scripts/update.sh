@@ -19,14 +19,20 @@ cp "$SCRIPT_DIR/init-firewall.sh" "$TARGET_DIR/"
 cp "$SCRIPT_DIR/entrypoint.sh" "$TARGET_DIR/"
 chmod +x "$TARGET_DIR/init-firewall.sh" "$TARGET_DIR/entrypoint.sh"
 
+# Copy skills
+if [ -d "$SCRIPT_DIR/skills" ]; then
+    mkdir -p "$TARGET_DIR/skills"
+    cp -r "$SCRIPT_DIR/skills/." "$TARGET_DIR/skills/"
+fi
+
 if [ ! -f "$TARGET_DIR/mise.toml" ]; then
-    cat > "$TARGET_DIR/mise.toml" << 'EOF'
+    cat > "$TARGET_DIR/mise.toml" << 'MISE'
 [tools]
 # 必要なランタイムをここに追加
 # node = "22"
 # python = "3.12"
 # bun = "latest"
-EOF
+MISE
 fi
 
 echo "Updated: $TARGET_DIR"

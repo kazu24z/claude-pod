@@ -100,6 +100,26 @@ if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
             ipset add allowed-domains "$ip"
         done < <(echo "$ips")
     done
+
+    # Load user-added domains from allowed-domains.txt
+    ALLOWED_DOMAINS_FILE="/workspace/.claude-container/allowed-domains.txt"
+    if [ -f "$ALLOWED_DOMAINS_FILE" ]; then
+        echo "Loading user-added domains from allowed-domains.txt..."
+        while IFS= read -r domain || [ -n "$domain" ]; do
+            # Skip empty lines and comments
+            [[ -z "$domain" || "$domain" =~ ^# ]] && continue
+            echo "Resolving user domain: $domain"
+            ips=$(dig +noall +answer +time=5 +tries=1 A "$domain" | awk '$4 == "A" {print $5}')
+            if [ -z "$ips" ]; then
+                echo "WARNING: Failed to resolve $domain - skipping"
+                continue
+            fi
+            while read -r ip; do
+                echo "Adding $ip for $domain"
+                ipset add -exist allowed-domains "$ip"
+            done <<< "$ips"
+        done < "$ALLOWED_DOMAINS_FILE"
+    fi
 fi
 
 # Set default policies to DROP

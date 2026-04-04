@@ -114,3 +114,62 @@ HTTPS（443番ポート）を全開放します。
 claude-pod update /path/to/your-project  # または cpod update /path/to/your-project
 claude-pod build  # または cpod build
 ```
+
+## ネットワークホワイトリストスキル
+
+whitelist モードでコマンドがネットワーク制限に引っかかった場合、Claude Code が自動的に検出してドメインをホワイトリストへ追加できます。
+
+### スキルの仕組み
+
+1. Claude Code がコマンドのエラー出力から接続先ドメインを自動検出する
+2. 追加するドメインと解決された IP アドレスをユーザーに提示する
+3. 承認後、`sudo ipset add` でファイアウォールへ即時追加する
+4. `/workspace/.claude-container/allowed-domains.txt` に永続化する
+5. コンテナ再起動時に `allowed-domains.txt` を自動読み込みして復元する
+
+### スキルの自動起動
+
+コマンド実行後のエラー出力に `dial tcp`・`connection refused`・`no such host` 等が含まれる場合、Claude Code が自動的にスキルを呼び出します。
+
+### スキルの手動呼び出し
+
+```
+/skill network-whitelist
+エラー出力: dial tcp: lookup proxy.golang.org on ...: no such host
+```
+
+### --auto フラグ（確認なし）
+
+```
+/skill network-whitelist --auto
+```
+
+確認プロンプトを省略して即時追加します。
+
+### allowed-domains.txt の手動編集
+
+追加するドメインを手動で管理したい場合は、`.claude-container/allowed-domains.txt` を直接編集できます。
+
+```
+# コメント行（# で始まる行はスキップ）
+proxy.golang.org
+sum.golang.org
+registry.npmjs.org
+```
+
+コンテナを再起動すると、ファイルに記載されたドメインが自動的に ipset に追加されます。
+
+### セットアップ後のプロジェクト構成（スキル追加後）
+
+```
+your-project/
+├── .claude-container/
+│   ├── Dockerfile
+│   ├── compose.yml
+│   ├── mise.toml
+│   ├── init-firewall.sh
+│   ├── entrypoint.sh
+│   ├── allowed-domains.txt   # スキル実行後に自動生成（手動編集も可）
+│   └── skills/
+│       └── network-whitelist.md
+```

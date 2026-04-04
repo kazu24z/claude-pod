@@ -36,6 +36,7 @@ services:
       - "..:/workspace"
       - "./init-firewall.sh:/usr/local/bin/init-firewall.sh"
       - "./entrypoint.sh:/usr/local/bin/entrypoint.sh"
+      - "./skills:/workspace/.claude/skills/claude-pod"
     working_dir: /workspace
     environment:
       - HOST_UID=${HOST_UID}
@@ -48,6 +49,8 @@ services:
     tty: true
     command: /usr/local/bin/entrypoint.sh
 COMPOSE
+
+mkdir -p "$TARGET_DIR/skills"
 
 cat > "$TARGET_DIR/mise.toml" << 'MISE'
 [tools]
