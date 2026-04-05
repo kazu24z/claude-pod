@@ -91,7 +91,7 @@ if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
         "statsig.anthropic.com" \
         "statsig.com"; do
         echo "Resolving $domain..."
-        ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
+        ips=$(dig +noall +answer "$domain" | awk '$4 == "A" {print $5}')
         if [ -z "$ips" ]; then
             echo "ERROR: Failed to resolve $domain"
             exit 1
@@ -102,8 +102,10 @@ if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
                 echo "ERROR: Invalid IP from DNS for $domain: $ip"
                 exit 1
             fi
-            echo "Adding $ip for $domain"
-            ipset add allowed-domains "$ip"
+            # /24 で登録し、同一サブネット内の IP 変動に対応
+            local subnet="${ip%.*}.0/24"
+            echo "Adding $subnet for $domain (resolved: $ip)"
+            ipset add -exist allowed-domains "$subnet"
         done < <(echo "$ips")
     done
 
