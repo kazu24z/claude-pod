@@ -83,10 +83,13 @@ if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
         ipset add allowed-domains "$cidr"
     done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | aggregate -q)
 
+    # Anthropic API (公式固定CIDR: https://platform.claude.com/docs/en/api/ip-addresses)
+    echo "Adding Anthropic API range 160.79.104.0/23"
+    ipset add allowed-domains "160.79.104.0/23"
+
     # Resolve and add other allowed domains
     for domain in \
         "registry.npmjs.org" \
-        "api.anthropic.com" \
         "sentry.io" \
         "statsig.anthropic.com" \
         "statsig.com"; do
