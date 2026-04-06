@@ -6,14 +6,14 @@ echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" \
     > /etc/sudoers.d/claude-pod-network
 chmod 0440 /etc/sudoers.d/claude-pod-network
 
-getent group "${HOST_GID}" > /dev/null 2>&1 || \
-    groupadd --gid "${HOST_GID}" hostgroup 2>/dev/null || true
-getent passwd "${HOST_UID}" > /dev/null 2>&1 || \
-    useradd --uid "${HOST_UID}" --gid "${HOST_GID}" \
-        --home /home/user --no-create-home \
-        --shell /bin/bash \
-        user 2>/dev/null || true
-echo "DEBUG passwd: $(getent passwd "${HOST_UID}" || echo 'NOT FOUND')" >&2
+# nsswitch.conf: systemd plugin fails in container, force files-only
+sed -i 's/^passwd:.*/passwd: files/' /etc/nsswitch.conf
+sed -i 's/^group:.*/group: files/' /etc/nsswitch.conf
+
+# Add HOST_UID to /etc/passwd (direct write, bypass useradd issues)
+if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd; then
+    printf 'user:x:%s:0::/home/user:/bin/bash\n' "${HOST_UID}" >> /etc/passwd
+fi
 
 /usr/local/bin/init-firewall.sh < /dev/null
 
@@ -22,7 +22,6 @@ if [ -d /usr/local/share/claude-pod/skills ]; then
     cp /usr/local/share/claude-pod/skills/* /home/user/.claude/skills/claude-pod/
 fi
 
-gosu "${HOST_UID}:${HOST_GID}" env HOME=/home/user printenv HOME >&2
 exec gosu "${HOST_UID}:${HOST_GID}" \
     env HOME=/home/user \
         CLAUDE_CONFIG_DIR=/home/user/.claude \
