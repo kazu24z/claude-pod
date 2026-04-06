@@ -37,6 +37,7 @@ claude() {
     --cap-add NET_ADMIN \
     --cap-add NET_RAW \
     --mount type=bind,source="${HOME}/.claude",target=/home/user/.claude \
+    --mount type=tmpfs,destination=/home/user/.claude/skills/claude-pod \
     --mount type=bind,source="${project_dir}",target=/workspace \
     --mount type=volume,source=mise-cache,target=/home/user/.local/share/mise \
     --workdir /workspace \
@@ -44,7 +45,7 @@ claude() {
     --env HOST_GID="$(id -g)" \
     --entrypoint bash \
     claude-pod:latest \
-    -c 'echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" > /etc/sudoers.d/claude-pod-network && chmod 0440 /etc/sudoers.d/claude-pod-network && /usr/local/bin/init-firewall.sh < /dev/null; export HOME=/home/user CLAUDE_CONFIG_DIR=/home/user/.claude http_proxy=http://127.0.0.1:3128 https_proxy=http://127.0.0.1:3128 HTTP_PROXY=http://127.0.0.1:3128 HTTPS_PROXY=http://127.0.0.1:3128 no_proxy=127.0.0.1,localhost NO_PROXY=127.0.0.1,localhost; exec gosu ${HOST_UID}:${HOST_GID} /usr/local/bin/claude "$@"' _ "$@"
+    -c '. /usr/local/bin/entrypoint.sh' _ "$@"
 }
 
 claude-pod() {
