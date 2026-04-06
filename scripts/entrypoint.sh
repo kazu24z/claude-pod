@@ -10,6 +10,8 @@ if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd
     printf 'user%s:x:%s:0::/home/user:/bin/bash\n' "${HOST_UID}" "${HOST_UID}" >> /etc/passwd
 fi
 
+ln -sf /home/user/.claude /.claude
+
 /usr/local/bin/init-firewall.sh < /dev/null
 
 if [ -d /usr/local/share/claude-pod/skills ]; then
