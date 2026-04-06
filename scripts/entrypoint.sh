@@ -8,6 +8,7 @@ chmod 0440 /etc/sudoers.d/claude-pod-network
 
 if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd; then
     printf 'user%s:x:%s:0::/home/user:/bin/bash\n' "${HOST_UID}" "${HOST_UID}" >> /etc/passwd
+    printf 'user%s:!:19000:0:99999:7:::\n' "${HOST_UID}" >> /etc/shadow
 fi
 
 ln -sf /home/user/.claude /.claude
