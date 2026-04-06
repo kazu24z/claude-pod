@@ -23,4 +23,7 @@ COPY scripts/skills/ /usr/local/share/claude-pod/skills/
 COPY scripts/init-firewall.sh /usr/local/bin/init-firewall.sh
 RUN chmod +x /usr/local/bin/init-firewall.sh
 
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 ENTRYPOINT ["/usr/bin/tini", "--"]
