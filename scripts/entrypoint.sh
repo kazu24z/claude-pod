@@ -22,6 +22,7 @@ if [ -d /usr/local/share/claude-pod/skills ]; then
     cp /usr/local/share/claude-pod/skills/* /home/user/.claude/skills/claude-pod/
 fi
 
+gosu "${HOST_UID}:${HOST_GID}" env HOME=/home/user printenv HOME >&2
 exec gosu "${HOST_UID}:${HOST_GID}" \
     env HOME=/home/user \
         CLAUDE_CONFIG_DIR=/home/user/.claude \
