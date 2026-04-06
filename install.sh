@@ -22,13 +22,11 @@ cat > "$CONFIG_FILE" << 'ENVEOF'
 export CLAUDE_POD_HOME="__REPO_DIR__"
 
 claude() {
-  local allow_web="false"
   local project_dir
   project_dir=$(pwd)
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --open) allow_web="true"; shift ;;
       --)     shift; break ;;
       -*)     echo "Unknown option: $1" >&2; return 1 ;;
       *)      break ;;
@@ -44,10 +42,9 @@ claude() {
     --workdir /workspace \
     --env HOST_UID="$(id -u)" \
     --env HOST_GID="$(id -g)" \
-    --env ALLOW_WEB_ACCESS="${allow_web}" \
     --entrypoint bash \
     claude-pod:latest \
-    -c 'echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/ipset, /usr/sbin/iptables" > /etc/sudoers.d/claude-pod-network && chmod 0440 /etc/sudoers.d/claude-pod-network && /usr/local/bin/init-firewall.sh < /dev/null; export HOME=/home/user CLAUDE_CONFIG_DIR=/home/user/.claude; exec gosu ${HOST_UID}:${HOST_GID} /usr/local/bin/claude "$@"' _ "$@"
+    -c 'echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" > /etc/sudoers.d/claude-pod-network && chmod 0440 /etc/sudoers.d/claude-pod-network && /usr/local/bin/init-firewall.sh < /dev/null; export HOME=/home/user CLAUDE_CONFIG_DIR=/home/user/.claude http_proxy=http://127.0.0.1:3128 https_proxy=http://127.0.0.1:3128 HTTP_PROXY=http://127.0.0.1:3128 HTTPS_PROXY=http://127.0.0.1:3128 no_proxy=127.0.0.1,localhost NO_PROXY=127.0.0.1,localhost; exec gosu ${HOST_UID}:${HOST_GID} /usr/local/bin/claude "$@"' _ "$@"
 }
 
 claude-pod() {
