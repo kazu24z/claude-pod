@@ -18,13 +18,13 @@ if [ -d /usr/local/share/claude-pod/skills ]; then
     cp /usr/local/share/claude-pod/skills/* /home/user/.claude/skills/claude-pod/
 fi
 
-export HOME=/home/user \
-    CLAUDE_CONFIG_DIR=/home/user/.claude \
-    http_proxy=http://127.0.0.1:3128 \
-    https_proxy=http://127.0.0.1:3128 \
-    HTTP_PROXY=http://127.0.0.1:3128 \
-    HTTPS_PROXY=http://127.0.0.1:3128 \
-    no_proxy=127.0.0.1,localhost \
-    NO_PROXY=127.0.0.1,localhost
-
-exec gosu "${HOST_UID}:${HOST_GID}" /usr/local/bin/claude "$@"
+exec gosu "${HOST_UID}:${HOST_GID}" \
+    env HOME=/home/user \
+        CLAUDE_CONFIG_DIR=/home/user/.claude \
+        http_proxy=http://127.0.0.1:3128 \
+        https_proxy=http://127.0.0.1:3128 \
+        HTTP_PROXY=http://127.0.0.1:3128 \
+        HTTPS_PROXY=http://127.0.0.1:3128 \
+        no_proxy=127.0.0.1,localhost \
+        NO_PROXY=127.0.0.1,localhost \
+    /usr/local/bin/claude "$@"
