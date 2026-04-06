@@ -6,6 +6,14 @@ echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" \
     > /etc/sudoers.d/claude-pod-network
 chmod 0440 /etc/sudoers.d/claude-pod-network
 
+getent group "${HOST_GID}" > /dev/null 2>&1 || \
+    groupadd --gid "${HOST_GID}" hostgroup 2>/dev/null || true
+getent passwd "${HOST_UID}" > /dev/null 2>&1 || \
+    useradd --uid "${HOST_UID}" --gid "${HOST_GID}" \
+        --home /home/user --no-create-home \
+        --shell /bin/bash \
+        user 2>/dev/null || true
+
 /usr/local/bin/init-firewall.sh < /dev/null
 
 if [ -d /usr/local/share/claude-pod/skills ]; then
