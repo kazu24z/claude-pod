@@ -6,14 +6,12 @@ echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" \
     > /etc/sudoers.d/claude-pod-network
 chmod 0440 /etc/sudoers.d/claude-pod-network
 
-# nsswitch.conf: systemd plugin fails in container, force files-only
-sed -i 's/^passwd:.*/passwd: files/' /etc/nsswitch.conf
-sed -i 's/^group:.*/group: files/' /etc/nsswitch.conf
-
-# Add HOST_UID to /etc/passwd (direct write, bypass useradd issues)
+# Add HOST_UID to /etc/passwd so getpwuid() resolves home dir correctly
 if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd; then
     printf 'user:x:%s:0::/home/user:/bin/bash\n' "${HOST_UID}" >> /etc/passwd
 fi
+
+chown "${HOST_UID}:${HOST_GID}" /home/user
 
 /usr/local/bin/init-firewall.sh < /dev/null
 
