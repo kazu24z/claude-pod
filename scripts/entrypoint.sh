@@ -13,6 +13,7 @@ getent passwd "${HOST_UID}" > /dev/null 2>&1 || \
         --home /home/user --no-create-home \
         --shell /bin/bash \
         user 2>/dev/null || true
+echo "DEBUG passwd: $(getent passwd "${HOST_UID}" || echo 'NOT FOUND')" >&2
 
 /usr/local/bin/init-firewall.sh < /dev/null
 
