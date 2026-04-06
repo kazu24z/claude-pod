@@ -20,7 +20,6 @@ source ~/.zshrc  # bash の場合は ~/.bashrc
 
 ```bash
 claude              # whitelist モードで起動
-claude --open       # ネットワーク制限なしで起動
 ```
 
 ### イメージの管理
@@ -50,27 +49,11 @@ claude-pod/
 claude
 ```
 
-以下のみ外部通信を許可します：
+GitHub / npm / Anthropic API など Claude Code の動作に必要なドメインのみ外部通信を許可します。それ以外はブロックされます。
 
-- GitHub（コード取得）
-- `registry.npmjs.org`
-- `api.anthropic.com`
-- `sentry.io`, `statsig.com`（Claude Code テレメトリ）
-- DNS / SSH
+## ネットワーク制限の解除（ドメイン追加）
 
-プロジェクトに `allowed-domains.txt` を置くと、追加ドメインも許可されます。
-
-### open モード
-
-```bash
-claude --open
-```
-
-ネットワーク制限なしで起動します。
-
-## ネットワークホワイトリストスキル
-
-whitelist モードでコマンドがネットワーク制限に引っかかった場合、Claude Code が自動的に検出してドメインをホワイトリストへ追加できます。
+whitelist モードでコマンドがネットワーク制限に引っかかった場合、`allowed-domains.txt` にドメインを追記することで通信を許可できます。
 
 ### allowed-domains.txt
 
@@ -82,4 +65,8 @@ proxy.golang.org
 sum.golang.org
 ```
 
-コンテナ起動時に自動で ipset に追加されます。
+コンテナ起動時に Squid の ACL として自動で読み込まれます。追加後は `sudo squid -k reconfigure` を実行すると即時反映されます。
+
+## ネットワークホワイトリストスキル
+
+whitelist モードでコマンドがネットワーク制限に引っかかった場合、Claude Code が自動的に検出してドメインをホワイトリストへ追加できます。

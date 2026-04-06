@@ -2,26 +2,16 @@
 set -euo pipefail  # Exit on error, undefined vars, and pipeline failures
 IFS=$'\n\t'       # Stricter word splitting
 
-# Network mode: false = whitelist only, true = allow all HTTPS (443)
-ALLOW_WEB_ACCESS="${ALLOW_WEB_ACCESS:-false}"
-
-# --open モードはネットワーク制限なし。iptables 設定をスキップ
-if [ "$ALLOW_WEB_ACCESS" = "true" ]; then
-    echo "Network mode: open (no restrictions)"
-    exit 0
-fi
-
 # 1. Extract Docker DNS info BEFORE any flushing
 DOCKER_DNS_RULES=$(iptables-save -t nat | grep "127\.0\.0\.11" || true)
 
-# Flush existing rules and delete existing ipsets
+# Flush existing rules
 iptables -F
 iptables -X
 iptables -t nat -F
 iptables -t nat -X
 iptables -t mangle -F
 iptables -t mangle -X
-ipset destroy allowed-domains 2>/dev/null || true
 
 # 2. Selectively restore ONLY internal Docker DNS resolution
 if [ -n "$DOCKER_DNS_RULES" ]; then
@@ -36,6 +26,7 @@ fi
 # Allow DNS, SSH, localhost
 iptables -A OUTPUT -p udp -d 127.0.0.11 --dport 53 -j ACCEPT
 iptables -A INPUT -p udp -s 127.0.0.11 --sport 53 -j ACCEPT
+
 iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
 iptables -A INPUT -i lo -j ACCEPT
@@ -51,89 +42,19 @@ fi
 HOST_NETWORK=$(echo "$HOST_IP" | sed "s/\.[0-9]*$/.0\/24/")
 echo "Host network detected as: $HOST_NETWORK"
 
+SQUID_UID=$(id -u proxy 2>/dev/null) || { echo "ERROR: Failed to get proxy user UID"; exit 1; }
+if [ -z "$SQUID_UID" ]; then
+    echo "ERROR: Failed to get proxy user UID"
+    exit 1
+fi
+
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT
 iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 
-# Whitelist mode: fetch IP data BEFORE setting DROP policy
-if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
-    echo "Network mode: whitelist"
+# Allow Squid process (proxy user) direct outbound access
+iptables -A OUTPUT -m owner --uid-owner "$SQUID_UID" -j ACCEPT
 
-    ipset create allowed-domains hash:net
-
-    # Fetch GitHub meta information and aggregate + add their IP ranges
-    echo "Fetching GitHub IP ranges..."
-    gh_ranges=$(curl -s https://api.github.com/meta)
-    if [ -z "$gh_ranges" ]; then
-        echo "ERROR: Failed to fetch GitHub IP ranges"
-        exit 1
-    fi
-
-    if ! echo "$gh_ranges" | jq -e '.web and .api and .git' >/dev/null; then
-        echo "ERROR: GitHub API response missing required fields"
-        exit 1
-    fi
-
-    echo "Processing GitHub IPs..."
-    while read -r cidr; do
-        if [[ ! "$cidr" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/[0-9]{1,2}$ ]]; then
-            echo "ERROR: Invalid CIDR range from GitHub meta: $cidr"
-            exit 1
-        fi
-        echo "Adding GitHub range $cidr"
-        ipset add allowed-domains "$cidr"
-    done < <(echo "$gh_ranges" | jq -r '(.web + .api + .git)[]' | aggregate -q)
-
-    # Anthropic API (公式固定CIDR: https://platform.claude.com/docs/en/api/ip-addresses)
-    echo "Adding Anthropic API range 160.79.104.0/23"
-    ipset add allowed-domains "160.79.104.0/23"
-
-    # Resolve and add other allowed domains
-    for domain in \
-        "registry.npmjs.org" \
-        "sentry.io" \
-        "statsig.anthropic.com" \
-        "statsig.com"; do
-        echo "Resolving $domain..."
-        ips=$(dig +noall +answer "$domain" | awk '$4 == "A" {print $5}')
-        if [ -z "$ips" ]; then
-            echo "ERROR: Failed to resolve $domain"
-            exit 1
-        fi
-
-        while read -r ip; do
-            if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-                echo "ERROR: Invalid IP from DNS for $domain: $ip"
-                exit 1
-            fi
-            # /24 で登録し、同一サブネット内の IP 変動に対応
-            local subnet="${ip%.*}.0/24"
-            echo "Adding $subnet for $domain (resolved: $ip)"
-            ipset add -exist allowed-domains "$subnet"
-        done < <(echo "$ips")
-    done
-
-    # Load user-added domains from allowed-domains.txt
-    ALLOWED_DOMAINS_FILE="/workspace/allowed-domains.txt"
-    if [ -f "$ALLOWED_DOMAINS_FILE" ]; then
-        echo "Loading user-added domains from allowed-domains.txt..."
-        while IFS= read -r domain || [ -n "$domain" ]; do
-            # Skip empty lines and comments
-            [[ -z "$domain" || "$domain" =~ ^# ]] && continue
-            echo "Resolving user domain: $domain"
-            ips=$(dig +noall +answer +time=5 +tries=1 A "$domain" | awk '$4 == "A" {print $5}')
-            if [ -z "$ips" ]; then
-                echo "WARNING: Failed to resolve $domain - skipping"
-                continue
-            fi
-            while read -r ip; do
-                echo "Adding $ip for $domain"
-                ipset add -exist allowed-domains "$ip"
-            done <<< "$ips"
-        done < "$ALLOWED_DOMAINS_FILE"
-    fi
-fi
-
-# Set default policies to DROP
+# Set default policies to DROP (fail-safe: before Squid starts)
 iptables -P INPUT DROP
 iptables -P FORWARD DROP
 iptables -P OUTPUT DROP
@@ -142,17 +63,76 @@ iptables -P OUTPUT DROP
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-if [ "$ALLOW_WEB_ACCESS" = "true" ]; then
-    echo "Network mode: web access (HTTPS 443 open)"
-    iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
-else
-    iptables -A OUTPUT -m set --match-set allowed-domains dst -j ACCEPT
+# Make stdout/stderr writable by Squid (proxy user)
+chmod a+w /dev/stdout /dev/stderr 2>/dev/null || true
+
+# Generate squid.conf
+USER_DOMAINS_CONF=""
+if [ -f /workspace/allowed-domains.txt ]; then
+    # Remove CRLF line endings if present (Windows format)
+    sed -i 's/\r$//' /workspace/allowed-domains.txt
+    USER_DOMAINS_CONF="
+acl user_domains dstdomain \"/workspace/allowed-domains.txt\""
 fi
 
-# Reject all other outbound traffic
-iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
+USER_DOMAINS_ACCESS=""
+if [ -f /workspace/allowed-domains.txt ]; then
+    USER_DOMAINS_ACCESS="
+http_access allow CONNECT user_domains
+http_access allow user_domains"
+fi
 
-echo "Firewall configuration complete"
+SQUID_CONF_CONTENT="http_port 3128
+
+acl allowed_domains dstdomain .github.com
+acl allowed_domains dstdomain .npmjs.org
+acl allowed_domains dstdomain .anthropic.com
+acl allowed_domains dstdomain .sentry.io
+acl allowed_domains dstdomain .statsig.com
+acl allowed_domains dstdomain .googleapis.com
+acl allowed_domains dstdomain .claude.com${USER_DOMAINS_CONF}
+
+http_access allow CONNECT allowed_domains${USER_DOMAINS_ACCESS}
+http_access allow allowed_domains
+http_access deny all
+
+access_log none
+cache_log /dev/null
+cache_store_log none
+cache deny all"
+
+if ! printf '%s\n' "$SQUID_CONF_CONTENT" > /etc/squid/squid.conf; then
+    echo "ERROR: Failed to write squid.conf" && exit 1
+fi
+
+# Start Squid in background
+squid -N &
+# shellcheck disable=SC2034
+SQUID_PID=$!
+
+# Wait for Squid to listen on port 3128 (timeout 10 seconds)
+SQUID_TIMEOUT=50
+SQUID_WAIT=0
+until ss -lnt | grep -q ':3128'; do
+    if [ "$SQUID_WAIT" -ge "$SQUID_TIMEOUT" ]; then
+        echo "ERROR: Squid failed to start within timeout"
+        exit 1
+    fi
+    sleep 0.2
+    SQUID_WAIT=$((SQUID_WAIT + 1))
+done
+echo "Squid started and listening on port 3128"
+
+# Export proxy environment variables for all processes
+export http_proxy=http://127.0.0.1:3128
+export https_proxy=http://127.0.0.1:3128
+export HTTP_PROXY=http://127.0.0.1:3128
+export HTTPS_PROXY=http://127.0.0.1:3128
+export no_proxy=127.0.0.1,localhost
+export NO_PROXY=127.0.0.1,localhost
+echo "Proxy environment variables set: http_proxy=$http_proxy"
+
+echo "Firewall + Squid configuration complete"
 echo "Verifying firewall rules..."
 
 # Verify GitHub API is accessible (both modes)
@@ -162,12 +142,10 @@ else
     echo "Firewall verification passed - able to reach https://api.github.com as expected"
 fi
 
-# In whitelist mode, verify example.com is blocked
-if [ "$ALLOW_WEB_ACCESS" = "false" ]; then
-    if curl --connect-timeout 5 https://example.com >/dev/null 2>&1; then
-        echo "ERROR: Firewall verification failed - was able to reach https://example.com"
-        exit 1
-    else
-        echo "Firewall verification passed - unable to reach https://example.com as expected"
-    fi
+# Verify example.com is blocked
+if curl --connect-timeout 5 https://example.com >/dev/null 2>&1; then
+    echo "ERROR: Firewall verification failed - was able to reach https://example.com"
+    exit 1
+else
+    echo "Firewall verification passed - unable to reach https://example.com as expected"
 fi
