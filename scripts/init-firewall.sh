@@ -66,21 +66,17 @@ iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 # Make stdout/stderr writable by Squid (proxy user)
 chmod a+w /dev/stdout /dev/stderr 2>/dev/null || true
 
-# Generate squid.conf
-USER_DOMAINS_CONF=""
-if [ -f /workspace/allowed-domains.txt ]; then
-    # Remove CRLF line endings if present (Windows format)
-    sed -i 's/\r$//' /workspace/allowed-domains.txt
-    USER_DOMAINS_CONF="
-acl user_domains dstdomain \"/workspace/allowed-domains.txt\""
-fi
+# Ensure allowed-domains.txt exists (required for squid -k reconfigure to work)
+touch /workspace/allowed-domains.txt
+sed -i 's/\r$//' /workspace/allowed-domains.txt
 
-USER_DOMAINS_ACCESS=""
-if [ -f /workspace/allowed-domains.txt ]; then
-    USER_DOMAINS_ACCESS="
+# Generate squid.conf
+USER_DOMAINS_CONF="
+acl user_domains dstdomain \"/workspace/allowed-domains.txt\""
+
+USER_DOMAINS_ACCESS="
 http_access allow CONNECT user_domains
 http_access allow user_domains"
-fi
 
 SQUID_CONF_CONTENT="http_port 3128
 
