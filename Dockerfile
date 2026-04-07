@@ -5,7 +5,7 @@ ENV DEVCONTAINER=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     less git curl procps sudo zsh unzip gnupg2 \
-    iptables iproute2 dnsutils jq gosu ca-certificates squid tini \
+    iptables iproute2 dnsutils jq gosu ca-certificates squid tini socat \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code
@@ -22,7 +22,12 @@ WORKDIR /workspace
 COPY scripts/skills/ /usr/local/share/claude-pod/skills/
 COPY scripts/init-l7.sh /usr/local/bin/init-l7.sh
 RUN chmod +x /usr/local/bin/init-l7.sh
+COPY scripts/tmux-shim.sh /usr/local/bin/tmux-shim.sh
+RUN chmod +x /usr/local/bin/tmux-shim.sh
 RUN mkdir -p /etc/claude-pod
+
+COPY scripts/poc-cmux-test.sh /usr/local/bin/poc-cmux-test.sh
+RUN chmod +x /usr/local/bin/poc-cmux-test.sh
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

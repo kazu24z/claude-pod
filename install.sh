@@ -33,33 +33,60 @@ cat > "$CONFIG_FILE" << 'ENVEOF'
 # claude-pod: Claude Container dev environment helper
 export CLAUDE_POD_HOME="__REPO_DIR__"
 
-claude() {
+cpod() {
+  local cmd="${1:-help}"
+  shift 2>/dev/null || true
+
+  case "$cmd" in
+    run)    _cpod_run "$@" ;;
+    build)  _cpod_build ;;
+    update) _cpod_update ;;
+    help|--help|-h) _cpod_help ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      _cpod_help >&2
+      return 1
+      ;;
+  esac
+}
+
+_cpod_help() {
+  cat << 'HELPEOF'
+Usage: cpod <command> [options]
+
+Commands:
+  run [-p] [-t] [-- args...]  Launch Claude Code in a sandboxed container
+  build                        Build/rebuild the claude-pod image
+  update                       Pull latest changes and rebuild
+
+Options for 'run':
+  -p          Enable protected mode (domain whitelist)
+  -t|--teams  Enable Agent Teams (cmux integration)
+  -- args     Pass flags through to Claude Code
+
+Examples:
+  cpod run              Launch with no network restriction
+  cpod run -p           Launch with domain whitelist protection
+  cpod run -t           Launch with Agent Teams (cmux panes)
+  cpod run -- --resume  Pass --resume to Claude Code
+HELPEOF
+}
+
+_cpod_run() {
   local project_dir protected docker_args
   project_dir=$(pwd)
   protected=""
+  teams=""
 
   # フラグパース
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --help|-h)
-        echo "Usage: claude [-p] [-- claude-args...]"
-        echo ""
-        echo "Launch Claude Code in a sandboxed container."
-        echo ""
-        echo "Options:"
-        echo "  -p          Enable protected mode (domain whitelist)"
-        echo "  -h, --help  Show this help message"
-        echo ""
-        echo "Examples:"
-        echo "  claude              Launch with no network restriction"
-        echo "  claude -p           Launch with domain whitelist protection"
-        echo "  claude -- --resume  Pass flags to Claude Code"
-        return 0
-        ;;
-      -p)     protected=true; shift ;;
-      --)     shift; break ;;
-      -*)     echo "Unknown option: $1" >&2; return 1 ;;
-      *)      break ;;
+      --help|-h) _cpod_help; return 0 ;;
+      -p)       protected=true; shift ;;
+      -t|--teams) teams=true; shift ;;
+      --)       shift; break ;;
+      -*)       echo "Unknown option: $1" >&2; return 1 ;;
+      *)        break ;;
     esac
   done
 
@@ -90,6 +117,29 @@ claude() {
     --entrypoint bash
   )
 
+  if [ "$teams" = "true" ]; then
+    local cmux_bridge_port=19876
+    # Check if bridge is already running
+    if ! lsof -i ":${cmux_bridge_port}" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "Starting cmux TCP bridge on port ${cmux_bridge_port}..."
+      python3 "${CLAUDE_POD_HOME}/scripts/cmux-bridge.py" --port "$cmux_bridge_port" &
+      CMUX_BRIDGE_PID=$!
+      sleep 0.5
+      if ! kill -0 "$CMUX_BRIDGE_PID" 2>/dev/null; then
+        echo "ERROR: cmux bridge failed to start" >&2
+        return 1
+      fi
+      echo "cmux bridge started (PID: $CMUX_BRIDGE_PID)"
+    else
+      echo "cmux bridge already running on port ${cmux_bridge_port}"
+    fi
+    docker_args+=(
+      --env "AGENT_TEAMS=1"
+      --env "CMUX_BRIDGE=tcp:host.docker.internal:${cmux_bridge_port}"
+      --env "HOST_PROJECT_DIR=${project_dir}"
+    )
+  fi
+
   if [ "$protected" = "true" ]; then
     docker_args+=(
       --cap-add NET_ADMIN
@@ -104,41 +154,24 @@ claude() {
   docker run "${docker_args[@]}" claude-pod:latest -c '. /usr/local/bin/entrypoint.sh' _ "$@"
 }
 
-claude-pod() {
-  local cmd="${1:-help}"
-  shift 2>/dev/null || true
-  case "$cmd" in
-    build)
-      echo "Building claude-pod:latest..."
-      if docker build -t claude-pod:latest "$CLAUDE_POD_HOME"; then
-        echo "Build complete: claude-pod:latest"
-      else
-        echo "ERROR: docker build failed" >&2
-        return 1
-      fi
-      ;;
-    update)
-      echo "Updating claude-pod..."
-      if ! git -C "$CLAUDE_POD_HOME" pull; then
-        echo "ERROR: git pull failed" >&2
-        return 1
-      fi
-      echo "Building claude-pod:latest..."
-      if docker build -t claude-pod:latest "$CLAUDE_POD_HOME"; then
-        echo "Build complete: claude-pod:latest"
-      else
-        echo "ERROR: docker build failed" >&2
-        return 1
-      fi
-      ;;
-    *)
-      echo "Usage: claude-pod <build|update>"
-      echo "  build  - Build/rebuild the global claude-pod image"
-      echo "  update - Pull latest changes and rebuild the image"
-      ;;
-  esac
+_cpod_build() {
+  echo "Building claude-pod:latest..."
+  if docker build -t claude-pod:latest "$CLAUDE_POD_HOME"; then
+    echo "Build complete: claude-pod:latest"
+  else
+    echo "ERROR: docker build failed" >&2
+    return 1
+  fi
 }
-alias cpod='claude-pod'
+
+_cpod_update() {
+  echo "Updating claude-pod..."
+  if ! git -C "$CLAUDE_POD_HOME" pull; then
+    echo "ERROR: git pull failed" >&2
+    return 1
+  fi
+  _cpod_build
+}
 ENVEOF
 
 # REPO_DIR のプレースホルダを実際のパスに置換
