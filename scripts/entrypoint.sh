@@ -29,14 +29,6 @@ case "$FIREWALL_MODE" in
     none|"")
         # No network restrictions - container isolation only
         ;;
-    l34)
-        # Capability check
-        if ! iptables -L -n >/dev/null 2>&1; then
-            echo "ERROR: FIREWALL_MODE=${FIREWALL_MODE} requires NET_ADMIN capability. Add --cap-add NET_ADMIN to docker run." >&2
-            exit 1
-        fi
-        /usr/local/bin/init-l34.sh < /dev/null
-        ;;
     l7)
         # Capability check
         if ! iptables -L -n >/dev/null 2>&1; then
@@ -44,8 +36,8 @@ case "$FIREWALL_MODE" in
             exit 1
         fi
 
-        # sudoers setup for iptables and squid (needed for squid -k reconfigure)
-        echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/iptables, /usr/sbin/squid" \
+        # sudoers setup for squid reload only (iptables runs as root in entrypoint)
+        echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/squid -k reconfigure" \
             > /etc/sudoers.d/claude-pod-network
         chmod 0440 /etc/sudoers.d/claude-pod-network
 
@@ -66,7 +58,7 @@ case "$FIREWALL_MODE" in
             NO_PROXY=127.0.0.1,localhost
         ;;
     *)
-        echo "ERROR: Unknown FIREWALL_MODE: ${FIREWALL_MODE}. Valid values: none, l34, l7" >&2
+        echo "ERROR: Unknown FIREWALL_MODE: ${FIREWALL_MODE}. Valid values: none, l7" >&2
         exit 1
         ;;
 esac

@@ -47,10 +47,6 @@ iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 
 # 6. Get Squid UID
 SQUID_UID=$(id -u proxy 2>/dev/null) || { echo "ERROR: Failed to get proxy user UID"; exit 1; }
-if [ -z "$SQUID_UID" ]; then
-    echo "ERROR: Failed to get proxy user UID"
-    exit 1
-fi
 
 # 7. Allow Squid process (proxy user) direct outbound access
 iptables -A OUTPUT -m owner --uid-owner "$SQUID_UID" -j ACCEPT
@@ -92,6 +88,8 @@ acl allowed_domains dstdomain .claude.com${USER_DOMAINS_CONF}
 
 http_access allow CONNECT allowed_domains${USER_DOMAINS_ACCESS}
 http_access allow allowed_domains
+acl numeric_host dstdom_regex ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$
+http_access deny numeric_host
 http_access deny all
 
 access_log none

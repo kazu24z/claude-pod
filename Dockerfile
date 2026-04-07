@@ -20,9 +20,8 @@ RUN mkdir -p /home/user
 WORKDIR /workspace
 
 COPY scripts/skills/ /usr/local/share/claude-pod/skills/
-COPY scripts/init-l34.sh /usr/local/bin/init-l34.sh
 COPY scripts/init-l7.sh /usr/local/bin/init-l7.sh
-RUN chmod +x /usr/local/bin/init-l34.sh /usr/local/bin/init-l7.sh
+RUN chmod +x /usr/local/bin/init-l7.sh
 RUN mkdir -p /etc/claude-pod
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
