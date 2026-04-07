@@ -1,11 +1,10 @@
 # claude-pod
 
-Claude Code をコンテナ内で安全に実行するための環境です。
-ネットワークをホワイトリストで制限し、ホスト環境を汚さずに Claude Code を使えます。
+Claude Code をコンテナ内で実行する環境。protected モードではドメインホワイトリストによるネットワーク制限を適用できる。
 
 ## セットアップ
 
-**動作環境:** macOS / Linux (Ubuntu 確認済み)
+動作環境: macOS / Linux（Docker 必須）
 
 ```bash
 git clone <this-repo>
@@ -14,19 +13,114 @@ cd claude-pod
 source ~/.zshrc  # bash の場合は ~/.bashrc
 ```
 
+`install.sh` は以下を行う:
+
+1. `~/.config/claude-pod/` に設定ファイルを生成
+2. `claude` / `claude-pod` / `cpod` コマンドをシェルに登録
+3. `claude-pod:latest` Docker イメージをビルド
+
 ## 使い方
 
-任意のプロジェクトディレクトリで：
+任意のプロジェクトディレクトリで実行する。
+
+### デフォルト（ネットワーク制限なし）
 
 ```bash
-claude              # whitelist モードで起動
+claude
 ```
 
-### イメージの管理
+コンテナ隔離のみ。ネットワーク制限はかからない。
+
+### protected モード（ドメインホワイトリスト）
 
 ```bash
-claude-pod build    # イメージを再ビルド（cpod build でも可）
-claude-pod update   # git pull + 再ビルド（cpod update でも可）
+claude -p
+```
+
+Squid プロキシ + iptables により、許可されたドメインへの通信のみ許可する。GitHub / npm / Anthropic API など Claude Code の動作に必要なドメインはデフォルトで許可済み。
+
+### Claude Code にフラグを渡す
+
+```bash
+claude -- --resume
+claude -p -- --resume
+```
+
+`--` 以降の引数は Claude Code にそのまま渡される。
+
+### ヘルプ
+
+```bash
+claude -h
+```
+
+## 設定
+
+設定ファイルは `~/.config/claude-pod/` に格納される。
+
+### config
+
+```bash
+# デフォルトで protected モードを有効にする
+PROTECTED=true
+```
+
+`PROTECTED=true` に設定すると、`-p` フラグなしでも常に protected モードで起動する。`-p` フラグは config の設定に関わらず protected モードを有効にする。
+
+### allowed-domains.txt
+
+protected モードで追加のドメインを許可する場合に使用する。
+
+```
+# コメント行
+proxy.golang.org
+sum.golang.org
+registry.yarnpkg.com
+```
+
+コンテナ起動時に Squid の ACL として読み込まれる。
+
+## ドメインの追加
+
+protected モードでコマンドがネットワーク制限に引っかかった場合、2つの方法でドメインを追加できる。
+
+### network-whitelist スキル（自動検出）
+
+protected モードのコンテナ内で、Claude Code がネットワークエラーを検出すると `network-whitelist` スキルが自動的に起動し、ドメインの追加を提案する。手動で呼び出すこともできる:
+
+```
+/skill network-whitelist
+エラー出力: dial tcp: lookup proxy.golang.org on ...: no such host
+```
+
+スキルは以下を行う:
+
+1. エラー出力からドメインを抽出
+2. ユーザーに確認
+3. `allowed-domains.txt` に追記
+4. `sudo squid -k reconfigure` で即時反映
+
+### 手動追加
+
+`~/.config/claude-pod/allowed-domains.txt` にドメインを追記し、コンテナ内で再読み込みする:
+
+```bash
+# ホスト側
+echo "proxy.golang.org" >> ~/.config/claude-pod/allowed-domains.txt
+
+# コンテナ内で即時反映
+sudo squid -k reconfigure
+```
+
+コンテナを再起動しても反映される。
+
+## イメージ管理
+
+```bash
+claude-pod build    # イメージを再ビルド
+claude-pod update   # git pull + 再ビルド
+cpod build          # claude-pod のエイリアス
+cpod update
 ```
 
 ## ファイル構成
@@ -34,39 +128,17 @@ claude-pod update   # git pull + 再ビルド（cpod update でも可）
 ```
 claude-pod/
 ├── install.sh              # claude/claude-pod コマンドをシェルに登録 + イメージビルド
-├── Dockerfile              # グローバルイメージ定義
+├── Dockerfile              # グローバルイメージ定義（Ubuntu 24.04 ベース）
 └── scripts/
-    ├── init-firewall.sh    # iptables ファイアウォール構築
+    ├── entrypoint.sh       # コンテナ起動時の初期化（FIREWALL_MODE で分岐）
+    ├── init-l7.sh          # Squid + iptables 設定（protected モード）
     └── skills/
-        └── network-whitelist.md
+        └── SKILL.md        # network-whitelist スキル定義
 ```
 
-## ネットワークモード
-
-### whitelist モード（デフォルト）
-
-```bash
-claude
 ```
-
-GitHub / npm / Anthropic API など Claude Code の動作に必要なドメインのみ外部通信を許可します。それ以外はブロックされます。
-
-## ネットワーク制限の解除（ドメイン追加）
-
-whitelist モードでコマンドがネットワーク制限に引っかかった場合、`allowed-domains.txt` にドメインを追記することで通信を許可できます。
-
-### allowed-domains.txt
-
-プロジェクトルートに `allowed-domains.txt` を配置：
-
+~/.config/claude-pod/
+├── config                  # PROTECTED=true/false
+├── allowed-domains.txt     # ドメインホワイトリスト（protected モード用）
+└── env.sh                  # claude() 関数定義（install.sh が生成）
 ```
-# コメント行（# で始まる行はスキップ）
-proxy.golang.org
-sum.golang.org
-```
-
-コンテナ起動時に Squid の ACL として自動で読み込まれます。追加後は `sudo squid -k reconfigure` を実行すると即時反映されます。
-
-## ネットワークホワイトリストスキル
-
-whitelist モードでコマンドがネットワーク制限に引っかかった場合、Claude Code が自動的に検出してドメインをホワイトリストへ追加できます。
