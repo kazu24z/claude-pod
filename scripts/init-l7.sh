@@ -66,7 +66,9 @@ chmod a+w /dev/stdout /dev/stderr 2>/dev/null || true
 # 11. squid.conf generation
 # Ensure allowed-domains.txt exists
 touch /etc/claude-pod/allowed-domains.txt
-sed -i 's/\r$//' /etc/claude-pod/allowed-domains.txt
+tr -d '\r' < /etc/claude-pod/allowed-domains.txt > /tmp/allowed-domains.tmp && \
+    cat /tmp/allowed-domains.tmp > /etc/claude-pod/allowed-domains.txt && \
+    rm /tmp/allowed-domains.tmp
 
 # Generate squid.conf
 USER_DOMAINS_CONF="
