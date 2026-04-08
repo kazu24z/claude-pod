@@ -61,7 +61,7 @@ Commands:
 
 Options for 'run':
   -p          Enable protected mode (domain whitelist)
-  -t|--teams  Enable Agent Teams (cmux integration)
+  -t|--teams  Enable Agent Teams (requires cmux)
   -- args     Pass flags through to Claude Code
 
 Examples:
@@ -96,6 +96,15 @@ _cpod_teams_setup() {
   else
     echo "cmux bridge already running on port ${cmux_bridge_port}"
   fi
+
+  # cmux ヘルスチェック（ブリッジ経由で ping が通るか）
+  if ! echo '{"id":"hc","method":"system.ping","params":{}}' | \
+      nc -w3 127.0.0.1 "$cmux_bridge_port" 2>/dev/null | grep -q '"ok":true'; then
+    echo "ERROR: cmux bridge started but cannot reach cmux. Is cmux running?" >&2
+    [ -n "${_CPOD_BRIDGE_STARTED:-}" ] && kill "$CMUX_BRIDGE_PID" 2>/dev/null
+    return 1
+  fi
+  echo "cmux health check passed"
 
   docker_args+=(
     --env "AGENT_TEAMS=1"
