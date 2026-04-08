@@ -39,6 +39,21 @@ claude -p
 
 Squid プロキシ + iptables により、許可されたドメインへの通信のみ許可する。GitHub / npm / Anthropic API など Claude Code の動作に必要なドメインはデフォルトで許可済み。
 
+### Agent Teams モード（cmux 連携）
+
+```bash
+cpod run -t
+cpod run -t -p    # protected モードとの併用も可
+```
+
+[cmux](https://cmux.com) 上で実行すると、Claude Code の Agent Teams 機能でサブエージェントが cmux のネイティブ pane として起動する。各 teammate は独立したコンテナで実行される。
+
+前提条件:
+- cmux がインストール済みで起動していること
+- cmux のターミナル上で `cpod run -t` を実行すること
+
+仕組み: コンテナ内の tmux コマンドを TCP ブリッジ経由でホスト側の cmux に中継する。ブリッジは `cpod run -t` 実行時に自動で起動・停止する。
+
 ### Claude Code にフラグを渡す
 
 ```bash
@@ -132,6 +147,9 @@ claude-pod/
 └── scripts/
     ├── entrypoint.sh       # コンテナ起動時の初期化（FIREWALL_MODE で分岐）
     ├── init-l7.sh          # Squid + iptables 設定（protected モード）
+    ├── init-teams.sh       # Agent Teams 初期化（tmux shim + cmux ID 取得）
+    ├── tmux-shim.sh        # コンテナ内 tmux → ホスト cmux ブリッジ転送
+    ├── cmux-bridge.py      # TCP ブリッジ（ホスト側で実行、cmux socket 中継）
     └── skills/
         └── SKILL.md        # network-whitelist スキル定義
 ```
