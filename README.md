@@ -82,6 +82,12 @@ PROTECTED=true
 
 `PROTECTED=true` に設定すると、`-p` フラグなしでも常に protected モードで起動する。`-p` フラグは config の設定に関わらず protected モードを有効にする。
 
+`EXTRA_MOUNTS` でコンテナに追加のディレクトリをマウントできる。claude-pod 本体を変更せずに個人用ディレクトリを追加する場合に使用する。
+
+```bash
+EXTRA_MOUNTS=--mount type=bind,source=${HOME}/knowledge,target=/home/user/knowledge
+```
+
 ### allowed-domains.txt
 
 protected モードで追加のドメインを許可する場合に使用する。
