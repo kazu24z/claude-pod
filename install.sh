@@ -72,6 +72,47 @@ Examples:
 HELPEOF
 }
 
+# --- Agent Teams helpers (cpod run -t) ---
+
+_cpod_teams_setup() {
+  local project_dir="$1"
+  local cmux_bridge_port=19876
+  local cmux_bridge_log="${CLAUDE_POD_HOME}/.bridge.log"
+  CMUX_BRIDGE_PID=""
+  _CPOD_BRIDGE_STARTED=""
+
+  if ! lsof -i ":${cmux_bridge_port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Starting cmux TCP bridge on port ${cmux_bridge_port}..."
+    python3 "${CLAUDE_POD_HOME}/scripts/cmux-bridge.py" --port "$cmux_bridge_port" \
+      >"$cmux_bridge_log" 2>&1 &
+    CMUX_BRIDGE_PID=$!
+    sleep 0.5
+    if ! kill -0 "$CMUX_BRIDGE_PID" 2>/dev/null; then
+      echo "ERROR: cmux bridge failed to start. Check $cmux_bridge_log" >&2
+      return 1
+    fi
+    _CPOD_BRIDGE_STARTED=true
+    echo "cmux bridge started (PID: $CMUX_BRIDGE_PID, log: $cmux_bridge_log)"
+  else
+    echo "cmux bridge already running on port ${cmux_bridge_port}"
+  fi
+
+  docker_args+=(
+    --env "AGENT_TEAMS=1"
+    --env "CMUX_BRIDGE=tcp:host.docker.internal:${cmux_bridge_port}"
+    --env "HOST_PROJECT_DIR=${project_dir}"
+  )
+}
+
+_cpod_teams_cleanup() {
+  if [ -n "${_CPOD_BRIDGE_STARTED:-}" ] && [ -n "${CMUX_BRIDGE_PID:-}" ] && kill -0 "$CMUX_BRIDGE_PID" 2>/dev/null; then
+    kill "$CMUX_BRIDGE_PID" 2>/dev/null
+    echo "cmux bridge stopped (PID: $CMUX_BRIDGE_PID)"
+  fi
+}
+
+# --- Main run command ---
+
 _cpod_run() {
   local project_dir protected docker_args
   project_dir=$(pwd)
@@ -118,26 +159,7 @@ _cpod_run() {
   )
 
   if [ "$teams" = "true" ]; then
-    local cmux_bridge_port=19876
-    # Check if bridge is already running
-    if ! lsof -i ":${cmux_bridge_port}" -sTCP:LISTEN >/dev/null 2>&1; then
-      echo "Starting cmux TCP bridge on port ${cmux_bridge_port}..."
-      python3 "${CLAUDE_POD_HOME}/scripts/cmux-bridge.py" --port "$cmux_bridge_port" &
-      CMUX_BRIDGE_PID=$!
-      sleep 0.5
-      if ! kill -0 "$CMUX_BRIDGE_PID" 2>/dev/null; then
-        echo "ERROR: cmux bridge failed to start" >&2
-        return 1
-      fi
-      echo "cmux bridge started (PID: $CMUX_BRIDGE_PID)"
-    else
-      echo "cmux bridge already running on port ${cmux_bridge_port}"
-    fi
-    docker_args+=(
-      --env "AGENT_TEAMS=1"
-      --env "CMUX_BRIDGE=tcp:host.docker.internal:${cmux_bridge_port}"
-      --env "HOST_PROJECT_DIR=${project_dir}"
-    )
+    _cpod_teams_setup "$project_dir" || return 1
   fi
 
   if [ "$protected" = "true" ]; then
@@ -152,6 +174,8 @@ _cpod_run() {
   fi
 
   docker run "${docker_args[@]}" claude-pod:latest -c '. /usr/local/bin/entrypoint.sh' _ "$@"
+
+  _cpod_teams_cleanup
 }
 
 _cpod_build() {

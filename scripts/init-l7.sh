@@ -42,6 +42,14 @@ fi
 HOST_NETWORK=$(echo "$HOST_IP" | sed "s/\.[0-9]*$/.0\/24/")
 echo "Host network detected as: $HOST_NETWORK"
 
+# 5b. Allow host.docker.internal (OrbStack/Docker Desktop uses a different IP)
+DOCKER_HOST_IP=$(getent hosts host.docker.internal 2>/dev/null | awk '{print $1}')
+if [ -n "$DOCKER_HOST_IP" ]; then
+    echo "Docker host IP detected as: $DOCKER_HOST_IP"
+    iptables -A INPUT -s "$DOCKER_HOST_IP" -j ACCEPT
+    iptables -A OUTPUT -d "$DOCKER_HOST_IP" -j ACCEPT
+fi
+
 iptables -A INPUT -s "$HOST_NETWORK" -j ACCEPT
 iptables -A OUTPUT -d "$HOST_NETWORK" -j ACCEPT
 

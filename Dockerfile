@@ -23,11 +23,10 @@ COPY scripts/skills/ /usr/local/share/claude-pod/skills/
 COPY scripts/init-l7.sh /usr/local/bin/init-l7.sh
 RUN chmod +x /usr/local/bin/init-l7.sh
 COPY scripts/tmux-shim.sh /usr/local/bin/tmux-shim.sh
-RUN chmod +x /usr/local/bin/tmux-shim.sh
-RUN mkdir -p /etc/claude-pod
-
+COPY scripts/init-teams.sh /usr/local/bin/init-teams.sh
 COPY scripts/poc-cmux-test.sh /usr/local/bin/poc-cmux-test.sh
-RUN chmod +x /usr/local/bin/poc-cmux-test.sh
+RUN chmod +x /usr/local/bin/tmux-shim.sh /usr/local/bin/init-teams.sh /usr/local/bin/poc-cmux-test.sh
+RUN mkdir -p /etc/claude-pod
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
