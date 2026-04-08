@@ -94,6 +94,8 @@ def rewrite_container_command(cmd_str: str) -> str:
     Input:  cd /workspace && env K=V K=V /usr/local/bin/claude --agent-id ...
     Output: cd /host/project && cpod run --teams -- --agent-id ...
     """
+    original = cmd_str
+
     cmd_str = cmd_str.replace("/workspace", _project_dir)
 
     cmd_str = re.sub(
@@ -103,6 +105,10 @@ def rewrite_container_command(cmd_str: str) -> str:
     )
 
     cmd_str = cmd_str.replace("/usr/local/bin/claude", "cpod run --teams --")
+
+    if cmd_str == original:
+        print(f"bridge[rewrite]: WARNING: no rewrite matched. Command format may have changed.", file=sys.stderr)
+        print(f"bridge[rewrite]:   original: {original[:200]}", file=sys.stderr)
 
     return cmd_str
 
@@ -316,6 +322,15 @@ def main():
         print(f"ERROR: cmux binary not found: {args.cmux_bin}", file=sys.stderr)
         sys.exit(1)
 
+    # Log cmux version for troubleshooting
+    try:
+        cmux_version = subprocess.run(
+            [args.cmux_bin, "--version"], capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        cmux_version = "unknown"
+
+    print(f"cmux-bridge: cmux-version={cmux_version}")
     print(f"cmux-bridge: socket={args.socket}")
     print(f"cmux-bridge: cmux-bin={args.cmux_bin}")
     print(f"cmux-bridge: project-dir={_project_dir}")
