@@ -167,6 +167,15 @@ _cpod_run() {
     --entrypoint bash
   )
 
+  # ユーザー定義の追加マウント（config の EXTRA_MOUNTS）
+  if [ -f "$HOME/.config/claude-pod/config" ] && [ -r "$HOME/.config/claude-pod/config" ]; then
+    local extra_mounts
+    extra_mounts=$(grep '^EXTRA_MOUNTS=' "$HOME/.config/claude-pod/config" | tail -1 | cut -d= -f2- | tr -d '"'"'")
+    if [ -n "$extra_mounts" ]; then
+      eval "docker_args+=($extra_mounts)"
+    fi
+  fi
+
   if [ "$teams" = "true" ]; then
     _cpod_teams_setup "$project_dir" || return 1
   fi
