@@ -5,21 +5,44 @@ IFS=$'\n\t'
 # =====================================================
 # entrypoint.sh - Claude Pod container entrypoint
 # Branches initialization based on FIREWALL_MODE
+#
+# Architecture:
+#   sandbox-core : Firewall, user mapping, proxy (tool-agnostic)
+#   adapter      : Tool-specific setup (Claude Code by default)
 # =====================================================
 
-# --- Common processing (all modes) ---
+# --- Sandbox core: common processing (all modes) ---
 
-# Symlink /.claude -> /home/user/.claude (Claude Code looks for /.claude when HOME=/)
-ln -sf /home/user/.claude /.claude
+export HOME=/home/user
 
-# Copy skill files into user config
-if [ -d /usr/local/share/claude-pod/skills ]; then
-    mkdir -p /home/user/.claude/skills/claude-pod
-    cp /usr/local/share/claude-pod/skills/* /home/user/.claude/skills/claude-pod/
+# Symlink host-config files to / as fallback (some tools override HOME=/)
+[ -f /home/user/.gitconfig ] && ln -sf /home/user/.gitconfig /.gitconfig
+
+# Ensure .ssh directory exists (for known_hosts mount and ssh-agent)
+mkdir -p /home/user/.ssh && chmod 700 /home/user/.ssh && chown "${HOST_UID}:${HOST_GID}" /home/user/.ssh
+
+# Add user to /etc/passwd if not present (required by ssh, sudo, etc.)
+if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd; then
+    printf 'user%s:x:%s:%s::/home/user:/bin/bash\n' "${HOST_UID}" "${HOST_UID}" "${HOST_GID}" >> /etc/passwd
 fi
 
-export HOME=/home/user \
-    CLAUDE_CONFIG_DIR=/home/user/.claude
+# --- Adapter: tool-specific setup ---
+
+SANDBOX_CMD="${SANDBOX_CMD:-/usr/local/bin/claude}"
+
+# Claude Code adapter (skip if running a different tool)
+if [ "$SANDBOX_CMD" = "/usr/local/bin/claude" ]; then
+    # Symlink /.claude -> /home/user/.claude (Claude Code looks for /.claude when HOME=/)
+    ln -sf /home/user/.claude /.claude
+
+    # Copy skill files into user config
+    if [ -d /usr/local/share/claude-pod/skills ]; then
+        mkdir -p /home/user/.claude/skills/claude-pod
+        cp /usr/local/share/claude-pod/skills/* /home/user/.claude/skills/claude-pod/
+    fi
+
+    export CLAUDE_CONFIG_DIR=/home/user/.claude
+fi
 
 # --- Agent Teams setup (optional, -t flag only) ---
 
@@ -48,9 +71,8 @@ case "$FIREWALL_MODE" in
             > /etc/sudoers.d/claude-pod-network
         chmod 0440 /etc/sudoers.d/claude-pod-network
 
-        # Add user to /etc/passwd and /etc/shadow if not present (for sudo)
-        if ! awk -F: -v uid="${HOST_UID}" '$3==uid{found=1}END{exit !found}' /etc/passwd; then
-            printf 'user%s:x:%s:0::/home/user:/bin/bash\n' "${HOST_UID}" "${HOST_UID}" >> /etc/passwd
+        # Add user to /etc/shadow if not present (required for sudo)
+        if ! awk -F: -v uid="user${HOST_UID}" '$1==uid{found=1}END{exit !found}' /etc/shadow; then
             printf 'user%s:!:19000:0:99999:7:::\n' "${HOST_UID}" >> /etc/shadow
         fi
 
@@ -70,4 +92,4 @@ case "$FIREWALL_MODE" in
         ;;
 esac
 
-exec gosu "${HOST_UID}:${HOST_GID}" /usr/local/bin/claude "$@"
+exec gosu "${HOST_UID}:${HOST_GID}" "${SANDBOX_CMD}" "$@"

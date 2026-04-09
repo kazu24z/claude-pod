@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DEVCONTAINER=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    less git curl procps sudo zsh unzip gnupg2 \
+    less git curl procps sudo zsh unzip gnupg2 openssh-client \
     iptables iproute2 dnsutils jq gosu ca-certificates squid tini socat \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 

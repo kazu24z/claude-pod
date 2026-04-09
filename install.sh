@@ -164,8 +164,46 @@ _cpod_run() {
     --workdir /workspace
     --env "HOST_UID=$(id -u)"
     --env "HOST_GID=$(id -g)"
+    --env "SANDBOX_CMD=${SANDBOX_CMD:-/usr/local/bin/claude}"
     --entrypoint bash
   )
+
+  # Host TMPDIR passthrough (read-only)
+  # Enables clipboard image paste: terminal pastes host path, container reads the file
+  if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
+    docker_args+=(--mount "type=bind,source=${TMPDIR},target=${TMPDIR},readonly")
+  fi
+
+  # git config passthrough (read-only)
+  # git checks ~/.gitconfig first, then ~/.config/git/config (XDG)
+  if [ -f "$HOME/.gitconfig" ]; then
+    docker_args+=(--mount "type=bind,source=${HOME}/.gitconfig,target=/home/user/.gitconfig,readonly")
+  elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" ]; then
+    docker_args+=(--mount "type=bind,source=${XDG_CONFIG_HOME:-$HOME/.config}/git/config,target=/home/user/.gitconfig,readonly")
+  fi
+
+  # ssh known_hosts passthrough (read-only, avoids host key verification failure)
+  if [ -f "$HOME/.ssh/known_hosts" ]; then
+    docker_args+=(
+      --mount "type=bind,source=${HOME}/.ssh/known_hosts,target=/home/user/.ssh/known_hosts,readonly"
+    )
+  fi
+
+  # ssh-agent forwarding (pass socket, not key files)
+  # macOS (Docker Desktop / OrbStack): host socket can't be bind-mounted directly;
+  # use the VM-proxied socket at /run/host-services/ssh-auth.sock instead.
+  # Linux: bind-mount SSH_AUTH_SOCK directly.
+  if [ "$(uname)" = "Darwin" ] && [ -n "${SSH_AUTH_SOCK:-}" ]; then
+    docker_args+=(
+      --mount "type=bind,source=/run/host-services/ssh-auth.sock,target=/tmp/ssh-agent.sock"
+      --env "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
+    )
+  elif [ -n "${SSH_AUTH_SOCK:-}" ] && [ -e "$SSH_AUTH_SOCK" ]; then
+    docker_args+=(
+      --mount "type=bind,source=${SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock"
+      --env "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
+    )
+  fi
 
   # ユーザー定義の追加マウント（config の EXTRA_MOUNTS）
   if [ -f "$HOME/.config/claude-pod/config" ] && [ -r "$HOME/.config/claude-pod/config" ]; then
