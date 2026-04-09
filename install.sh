@@ -187,6 +187,8 @@ _cpod_run() {
 
   # Host TMPDIR passthrough (read-only)
   # Enables clipboard image paste: terminal pastes host path, container reads the file
+  # Note: exposes host TMPDIR contents (readonly). Scoping to subdirectory would break
+  # clipboard paste, so we accept this tradeoff.
   if [ -n "${TMPDIR:-}" ] && [ -d "$TMPDIR" ]; then
     docker_args+=(--mount "type=bind,source=${TMPDIR},target=${TMPDIR},readonly")
   fi

@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -96,7 +97,7 @@ def rewrite_container_command(cmd_str: str) -> str:
     """
     original = cmd_str
 
-    cmd_str = cmd_str.replace("/workspace", _project_dir)
+    cmd_str = cmd_str.replace("/workspace", shlex.quote(_project_dir))
 
     cmd_str = re.sub(
         r"env\s+(?:\S+=\S+\s+)*/usr/local/bin/claude\b",

@@ -80,7 +80,7 @@ case "$FIREWALL_MODE" in
         fi
 
         # sudoers setup for squid reload only (iptables runs as root in entrypoint)
-        echo "user${HOST_UID} ALL=(ALL) NOPASSWD: /usr/sbin/squid -k reconfigure" \
+        echo "user${HOST_UID} ALL=(root) NOPASSWD: /usr/sbin/squid -k reconfigure" \
             > /etc/sudoers.d/claude-pod-network
         chmod 0440 /etc/sudoers.d/claude-pod-network
 

@@ -70,10 +70,12 @@ iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 chmod a+w /dev/stdout /dev/stderr 2>/dev/null || true
 
 # 11. Auto-detect language profiles
+PROFILE_DOMAINS_FILE=$(mktemp /tmp/claude-pod-profiles.XXXXXX)
+
 detect_profiles() {
     local profiles_dir="/usr/local/share/claude-pod/profiles"
     local detect_conf="${profiles_dir}/detect.conf"
-    local output_file="/tmp/claude-pod-profiles.txt"
+    local output_file="$PROFILE_DOMAINS_FILE"
     local detected_profiles=""
 
     : > "$output_file"
@@ -110,9 +112,10 @@ detect_profiles
 # 12. squid.conf generation
 # Ensure allowed-domains.txt exists
 touch /etc/claude-pod/allowed-domains.txt
-tr -d '\r' < /etc/claude-pod/allowed-domains.txt > /tmp/allowed-domains.tmp && \
-    cat /tmp/allowed-domains.tmp > /etc/claude-pod/allowed-domains.txt && \
-    rm /tmp/allowed-domains.tmp
+_tmp_domains=$(mktemp /tmp/allowed-domains.XXXXXX)
+tr -d '\r' < /etc/claude-pod/allowed-domains.txt > "$_tmp_domains" && \
+    cat "$_tmp_domains" > /etc/claude-pod/allowed-domains.txt && \
+    rm "$_tmp_domains"
 
 # Generate squid.conf
 USER_DOMAINS_CONF="
@@ -125,9 +128,9 @@ http_access allow user_domains"
 # Profile domains (auto-detected, ephemeral)
 PROFILE_DOMAINS_CONF=""
 PROFILE_DOMAINS_ACCESS=""
-if [ -s /tmp/claude-pod-profiles.txt ]; then
+if [ -s "$PROFILE_DOMAINS_FILE" ]; then
     PROFILE_DOMAINS_CONF="
-acl profile_domains dstdomain \"/tmp/claude-pod-profiles.txt\""
+acl profile_domains dstdomain \"${PROFILE_DOMAINS_FILE}\""
     PROFILE_DOMAINS_ACCESS="
 http_access allow CONNECT profile_domains
 http_access allow profile_domains"
@@ -135,6 +138,7 @@ fi
 
 SQUID_CONF_CONTENT="http_port 3128
 
+acl SSL_ports port 443 8443
 acl allowed_domains dstdomain .github.com
 acl allowed_domains dstdomain .npmjs.org
 acl allowed_domains dstdomain .anthropic.com
@@ -143,6 +147,7 @@ acl allowed_domains dstdomain .statsig.com
 acl allowed_domains dstdomain .googleapis.com
 acl allowed_domains dstdomain .claude.com${USER_DOMAINS_CONF}${PROFILE_DOMAINS_CONF}
 
+http_access deny CONNECT !SSL_ports
 http_access allow CONNECT allowed_domains${USER_DOMAINS_ACCESS}${PROFILE_DOMAINS_ACCESS}
 http_access allow allowed_domains
 acl numeric_host dstdom_regex ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$

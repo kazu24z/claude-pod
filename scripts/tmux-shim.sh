@@ -13,26 +13,14 @@ BRIDGE_PORT=$(echo "$CMUX_BRIDGE" | cut -d: -f3)
 # tmux-compat port = socket port + 1
 TMUX_PORT=$((BRIDGE_PORT + 1))
 
-# Build JSON payload with args array
-args_json="["
-first=true
-for arg in "$@"; do
-    # Escape special JSON chars
-    escaped=$(printf '%s' "$arg" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    if $first; then
-        args_json="${args_json}\"${escaped}\""
-        first=false
-    else
-        args_json="${args_json},\"${escaped}\""
-    fi
-done
-args_json="${args_json}]"
+# Build JSON payload with jq (handles all special chars correctly)
+args_json=$(printf '%s\0' "$@" | jq -Rs 'split("\u0000") | .[:-1]')
 
-# Include TMUX env vars so bridge can set them for cmux __tmux-compat
-tmux_escaped=$(printf '%s' "${TMUX:-}" | sed 's/\\/\\\\/g; s/"/\\"/g')
-tmux_pane_escaped=$(printf '%s' "${TMUX_PANE:-}" | sed 's/\\/\\\\/g; s/"/\\"/g')
-
-payload="{\"args\":${args_json},\"env\":{\"TMUX\":\"${tmux_escaped}\",\"TMUX_PANE\":\"${tmux_pane_escaped}\"}}"
+payload=$(jq -nc \
+    --argjson args "$args_json" \
+    --arg tmux "${TMUX:-}" \
+    --arg tmux_pane "${TMUX_PANE:-}" \
+    '{args: $args, env: {TMUX: $tmux, TMUX_PANE: $tmux_pane}}')
 
 # Send to bridge, get response
 response=$(printf '%s' "$payload" | socat -t10 - "TCP:${BRIDGE_HOST}:${TMUX_PORT}" 2>/dev/null)
