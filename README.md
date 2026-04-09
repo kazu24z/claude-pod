@@ -54,6 +54,18 @@ cpod run -t -p    # protected モードとの併用も可
 
 仕組み: コンテナ内の tmux コマンドを TCP ブリッジ経由でホスト側の cmux に中継する。ブリッジは `cpod run -t` 実行時に自動で起動・停止する。
 
+### コンテナ名の指定（`-n`）
+
+```bash
+cpod run -n auth-fix       # → claude-pod.auth-fix
+cpod run -n refactor -p    # → claude-pod.refactor（protected モード）
+cpod run                   # → claude-pod.a3f1b2（ランダム）
+```
+
+`-n` でコンテナに名前を付けられる。OrbStack のサイドバーや `docker ps` でどのコンテナかを識別しやすくなる。未指定時はランダム文字列が付与される。
+
+コンテナ内から確認する場合は `hostname` コマンドで表示できる。
+
 ### Claude Code にフラグを渡す
 
 ```bash

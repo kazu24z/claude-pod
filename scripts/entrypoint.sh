@@ -92,4 +92,10 @@ case "$FIREWALL_MODE" in
         ;;
 esac
 
+# コンテナ識別表示
+if [ -n "${CPOD_NAME:-}" ]; then
+    printf '\033]0;%s\033\\' "$CPOD_NAME"
+    echo "📦 $CPOD_NAME"
+fi
+
 exec gosu "${HOST_UID}:${HOST_GID}" "${SANDBOX_CMD}" "$@"

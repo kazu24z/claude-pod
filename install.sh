@@ -123,16 +123,18 @@ _cpod_teams_cleanup() {
 # --- Main run command ---
 
 _cpod_run() {
-  local project_dir protected docker_args
+  local project_dir protected docker_args label
   project_dir=$(pwd)
   protected=""
   teams=""
+  label=""
   # フラグパース
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --help|-h) _cpod_help; return 0 ;;
       -p)       protected=true; shift ;;
       -t|--teams) teams=true; shift ;;
+      -n)       label="$2"; shift 2 ;;
       --)       shift; break ;;
       -*)       echo "Unknown option: $1" >&2; return 1 ;;
       *)        break ;;
@@ -153,9 +155,22 @@ _cpod_run() {
     *) echo "Invalid PROTECTED value: $protected. Valid: true, false" >&2; return 1 ;;
   esac
 
+  # コンテナ名の生成（プロジェクトディレクトリ名 + ラベル or ランダムID）
+  # OrbStack / docker ps で識別しやすくする
+  local container_name dir_slug
+  dir_slug="$(basename "$project_dir" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g')"
+  if [ -n "$label" ]; then
+    container_name="${dir_slug}.$(echo "$label" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g')"
+  else
+    container_name="${dir_slug}.$(head -c4 /dev/urandom | xxd -p | head -c6)"
+  fi
+
   # docker run 引数の動的構築
   docker_args=(
     --rm -it
+    --name "$container_name"
+    --hostname "$container_name"
+    --env "CPOD_NAME=$container_name"
     --mount "type=bind,source=${HOME}/.claude,target=/home/user/.claude"
     --mount "type=tmpfs,destination=/home/user/.claude/skills/claude-pod"
     --mount "type=bind,source=${project_dir},target=/workspace"
