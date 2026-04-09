@@ -23,6 +23,9 @@ if [ ! -f "$CLAUDE_POD_CONFIG_DIR/config" ]; then
 # claude-pod security configuration
 # PROTECTED=true で通信をドメインホワイトリストで制限
 PROTECTED=false
+
+# 追加マウント（1行1エントリ、--mount 形式）
+# EXTRA_MOUNTS[]=--mount type=bind,source=/home/user/knowledge,target=/knowledge
 CONFIGEOF
     echo "Created config template: $CLAUDE_POD_CONFIG_DIR/config"
 fi
@@ -203,29 +206,21 @@ _cpod_run() {
     )
   fi
 
-  # ssh-agent forwarding (pass socket, not key files)
-  # macOS (Docker Desktop / OrbStack): host socket can't be bind-mounted directly;
-  # use the VM-proxied socket at /run/host-services/ssh-auth.sock instead.
-  # Linux: bind-mount SSH_AUTH_SOCK directly.
-  if [ "$(uname)" = "Darwin" ] && [ -n "${SSH_AUTH_SOCK:-}" ]; then
-    docker_args+=(
-      --mount "type=bind,source=/run/host-services/ssh-auth.sock,target=/tmp/ssh-agent.sock"
-      --env "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
-    )
-  elif [ -n "${SSH_AUTH_SOCK:-}" ] && [ -e "$SSH_AUTH_SOCK" ]; then
-    docker_args+=(
-      --mount "type=bind,source=${SSH_AUTH_SOCK},target=/tmp/ssh-agent.sock"
-      --env "SSH_AUTH_SOCK=/tmp/ssh-agent.sock"
-    )
+  # gh CLI auth passthrough (read-only)
+  # Enables git HTTPS auth via gh credential helper inside the container.
+  # SSH agent forwarding is intentionally removed (C-3/H-2: avoids SSH tunnel bypass and key exposure).
+  if [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/gh" ]; then
+    docker_args+=(--mount "type=bind,source=${XDG_CONFIG_HOME:-$HOME/.config}/gh,target=/home/user/.config/gh,readonly")
   fi
 
   # ユーザー定義の追加マウント（config の EXTRA_MOUNTS）
+  # 1行1エントリで readarray に読み込む（eval を使わない: C-1 対策）
   if [ -f "$HOME/.config/claude-pod/config" ] && [ -r "$HOME/.config/claude-pod/config" ]; then
-    local extra_mounts
-    extra_mounts=$(grep '^EXTRA_MOUNTS=' "$HOME/.config/claude-pod/config" | tail -1 | cut -d= -f2- | tr -d '"'"'")
-    if [ -n "$extra_mounts" ]; then
-      eval "docker_args+=($extra_mounts)"
-    fi
+    local extra_line
+    while IFS= read -r extra_line; do
+      [[ -z "$extra_line" || "$extra_line" =~ ^# ]] && continue
+      docker_args+=("$extra_line")
+    done < <(grep '^EXTRA_MOUNTS\[\]=' "$HOME/.config/claude-pod/config" | sed 's/^EXTRA_MOUNTS\[\]=//')
   fi
 
   if [ "$teams" = "true" ]; then

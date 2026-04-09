@@ -42,6 +42,14 @@ if [ "$SANDBOX_CMD" = "/usr/local/bin/claude" ]; then
     fi
 
     export CLAUDE_CONFIG_DIR=/home/user/.claude
+
+    # Force git to use HTTPS instead of SSH (security: eliminates SSH tunnel bypass)
+    # Uses --system (/etc/gitconfig) because ~/.gitconfig is bind-mounted readonly
+    if command -v gh >/dev/null 2>&1 && [ -f /home/user/.config/gh/hosts.yml ]; then
+        git config --system credential."https://github.com".helper '!/usr/bin/gh auth git-credential'
+    fi
+    git config --system url."https://github.com/".insteadOf "git@github.com:"
+    git config --system --add url."https://github.com/".insteadOf "ssh://git@github.com/"
 fi
 
 # --- Agent Teams setup (optional, -t flag only) ---
