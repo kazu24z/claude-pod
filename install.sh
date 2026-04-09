@@ -191,12 +191,17 @@ _cpod_run() {
     docker_args+=(--mount "type=bind,source=${TMPDIR},target=${TMPDIR},readonly")
   fi
 
-  # git config passthrough (read-only)
-  # git checks ~/.gitconfig first, then ~/.config/git/config (XDG)
+  # git config passthrough (safe fields only)
+  # Mount to a non-standard path so git doesn't auto-load it; entrypoint extracts user.name/email.
+  # (H-1: prevents credential.helper / core.fsmonitor from executing in container)
+  local host_gitconfig=""
   if [ -f "$HOME/.gitconfig" ]; then
-    docker_args+=(--mount "type=bind,source=${HOME}/.gitconfig,target=/home/user/.gitconfig,readonly")
+    host_gitconfig="$HOME/.gitconfig"
   elif [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/git/config" ]; then
-    docker_args+=(--mount "type=bind,source=${XDG_CONFIG_HOME:-$HOME/.config}/git/config,target=/home/user/.gitconfig,readonly")
+    host_gitconfig="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"
+  fi
+  if [ -n "$host_gitconfig" ]; then
+    docker_args+=(--mount "type=bind,source=${host_gitconfig},target=/tmp/host-gitconfig,readonly")
   fi
 
   # ssh known_hosts passthrough (read-only, avoids host key verification failure)

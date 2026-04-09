@@ -15,8 +15,13 @@ IFS=$'\n\t'
 
 export HOME=/home/user
 
-# Symlink host-config files to / as fallback (some tools override HOME=/)
-[ -f /home/user/.gitconfig ] && ln -sf /home/user/.gitconfig /.gitconfig
+# Extract safe git config from host (H-1: avoid executing credential.helper/fsmonitor)
+if [ -f /tmp/host-gitconfig ]; then
+    _git_user_name=$(git config -f /tmp/host-gitconfig user.name 2>/dev/null || true)
+    _git_user_email=$(git config -f /tmp/host-gitconfig user.email 2>/dev/null || true)
+    [ -n "$_git_user_name" ] && git config --system user.name "$_git_user_name"
+    [ -n "$_git_user_email" ] && git config --system user.email "$_git_user_email"
+fi
 
 # Ensure .ssh directory exists (for known_hosts mount and ssh-agent)
 mkdir -p /home/user/.ssh && chmod 700 /home/user/.ssh && chown "${HOST_UID}:${HOST_GID}" /home/user/.ssh
