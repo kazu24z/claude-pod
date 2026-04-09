@@ -1,0 +1,5 @@
+# Java / Maven / Gradle
+.repo.maven.apache.org
+.plugins.gradle.org
+.services.gradle.org
+.maven.google.com

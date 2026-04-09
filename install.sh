@@ -127,7 +127,6 @@ _cpod_run() {
   project_dir=$(pwd)
   protected=""
   teams=""
-
   # フラグパース
   while [ "$#" -gt 0 ]; do
     case "$1" in

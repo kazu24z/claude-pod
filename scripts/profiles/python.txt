@@ -1,0 +1,4 @@
+# Python / pip
+.pypi.org
+.pythonhosted.org
+files.pythonhosted.org

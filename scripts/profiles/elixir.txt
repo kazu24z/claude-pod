@@ -1,0 +1,4 @@
+# Elixir / Hex
+.hex.pm
+repo.hex.pm
+builds.hex.pm

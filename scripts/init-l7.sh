@@ -71,7 +71,45 @@ iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 # 10. Make stdout/stderr writable by Squid (proxy user)
 chmod a+w /dev/stdout /dev/stderr 2>/dev/null || true
 
-# 11. squid.conf generation
+# 11. Auto-detect language profiles
+detect_profiles() {
+    local profiles_dir="/usr/local/share/claude-pod/profiles"
+    local detect_conf="${profiles_dir}/detect.conf"
+    local output_file="/tmp/claude-pod-profiles.txt"
+    local detected_profiles=""
+
+    : > "$output_file"
+
+    if [ ! -f "$detect_conf" ]; then
+        return
+    fi
+
+    while IFS=' ' read -r marker profile; do
+        [[ -z "$marker" || "$marker" =~ ^# ]] && continue
+        if compgen -G "/workspace/${marker}" > /dev/null 2>&1; then
+            if ! echo "$detected_profiles" | grep -qw "$profile" 2>/dev/null; then
+                detected_profiles="${detected_profiles} ${profile}"
+                echo "Detected ${marker} -> activating '${profile}' profile"
+            fi
+        fi
+    done < "$detect_conf"
+
+    for profile in $detected_profiles; do
+        local profile_file="${profiles_dir}/${profile}.txt"
+        if [ -f "$profile_file" ]; then
+            while IFS= read -r domain || [ -n "$domain" ]; do
+                [[ -z "$domain" || "$domain" =~ ^# ]] && continue
+                if ! grep -qxF "$domain" "$output_file" 2>/dev/null; then
+                    echo "$domain" >> "$output_file"
+                fi
+            done < "$profile_file"
+        fi
+    done
+}
+
+detect_profiles
+
+# 12. squid.conf generation
 # Ensure allowed-domains.txt exists
 touch /etc/claude-pod/allowed-domains.txt
 tr -d '\r' < /etc/claude-pod/allowed-domains.txt > /tmp/allowed-domains.tmp && \
@@ -86,6 +124,17 @@ USER_DOMAINS_ACCESS="
 http_access allow CONNECT user_domains
 http_access allow user_domains"
 
+# Profile domains (auto-detected, ephemeral)
+PROFILE_DOMAINS_CONF=""
+PROFILE_DOMAINS_ACCESS=""
+if [ -s /tmp/claude-pod-profiles.txt ]; then
+    PROFILE_DOMAINS_CONF="
+acl profile_domains dstdomain \"/tmp/claude-pod-profiles.txt\""
+    PROFILE_DOMAINS_ACCESS="
+http_access allow CONNECT profile_domains
+http_access allow profile_domains"
+fi
+
 SQUID_CONF_CONTENT="http_port 3128
 
 acl allowed_domains dstdomain .github.com
@@ -94,9 +143,9 @@ acl allowed_domains dstdomain .anthropic.com
 acl allowed_domains dstdomain .sentry.io
 acl allowed_domains dstdomain .statsig.com
 acl allowed_domains dstdomain .googleapis.com
-acl allowed_domains dstdomain .claude.com${USER_DOMAINS_CONF}
+acl allowed_domains dstdomain .claude.com${USER_DOMAINS_CONF}${PROFILE_DOMAINS_CONF}
 
-http_access allow CONNECT allowed_domains${USER_DOMAINS_ACCESS}
+http_access allow CONNECT allowed_domains${USER_DOMAINS_ACCESS}${PROFILE_DOMAINS_ACCESS}
 http_access allow allowed_domains
 acl numeric_host dstdom_regex ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$
 http_access deny numeric_host

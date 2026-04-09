@@ -1,0 +1,3 @@
+# Swift / Swift Package Manager
+.swift.org
+.swiftpackageindex.com

@@ -20,6 +20,7 @@ RUN mkdir -p /home/user
 WORKDIR /workspace
 
 COPY scripts/skills/ /usr/local/share/claude-pod/skills/
+COPY scripts/profiles/ /usr/local/share/claude-pod/profiles/
 COPY scripts/init-l7.sh /usr/local/bin/init-l7.sh
 RUN chmod +x /usr/local/bin/init-l7.sh
 COPY scripts/tmux-shim.sh /usr/local/bin/tmux-shim.sh

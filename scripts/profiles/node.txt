@@ -1,0 +1,7 @@
+# Node.js / npm / yarn / pnpm
+.npmjs.org
+.registry.npmjs.org
+.yarnpkg.com
+.registry.yarnpkg.com
+.nodejs.org
+.unpkg.com

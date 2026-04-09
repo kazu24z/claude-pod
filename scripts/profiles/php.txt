@@ -1,0 +1,4 @@
+# PHP / Composer
+.packagist.org
+.getcomposer.org
+repo.packagist.org

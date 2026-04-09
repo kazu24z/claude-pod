@@ -1,0 +1,6 @@
+# Rust / Cargo
+.crates.io
+static.crates.io
+index.crates.io
+.rust-lang.org
+static.rust-lang.org
