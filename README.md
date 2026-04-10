@@ -151,6 +151,34 @@ sudo squid -k reconfigure
 
 コンテナを再起動しても反映される。
 
+## ランタイム
+
+コンテナには言語ランタイム（Go, Python, Node 等）は含まれていないが、バージョンマネージャー [mise](https://mise.jdx.dev/) がインストール済み。
+
+### 自動インストール
+
+プロジェクトルートに `mise.toml` または `.tool-versions` があれば、コンテナ起動時に `mise install` が自動実行される。
+
+```toml
+# mise.toml の例
+[tools]
+node = "22"
+python = "3.12"
+```
+
+mise-cache ボリュームでキャッシュされるため、2回目以降の起動は高速。
+
+### セッション中のインストール
+
+Claude Code がセッション中に必要なランタイムを自分でインストールすることもできる。
+
+```bash
+mise use node@22    # mise.toml に追記 + インストール
+mise install        # mise.toml の内容をインストール
+```
+
+`mise use` で追加されたランタイムは `mise.toml` に書き込まれるため、次回起動時にも自動でインストールされる。
+
 ## git 認証
 
 コンテナ内の git は HTTPS で動作する。SSH は使用しない。

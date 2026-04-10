@@ -105,6 +105,14 @@ case "$FIREWALL_MODE" in
         ;;
 esac
 
+# --- Runtime initialization (mise) ---
+if [ -f /workspace/mise.toml ] || [ -f /workspace/.tool-versions ]; then
+    chown -R "${HOST_UID}:${HOST_GID}" /home/user/.local/share/mise
+    gosu "${HOST_UID}:${HOST_GID}" mise trust --yes /workspace
+    gosu "${HOST_UID}:${HOST_GID}" mise install --yes
+    eval "$(gosu "${HOST_UID}:${HOST_GID}" mise activate bash)"
+fi
+
 # コンテナ識別表示
 if [ -n "${CPOD_NAME:-}" ]; then
     printf '\033]0;%s\033\\' "$CPOD_NAME"
