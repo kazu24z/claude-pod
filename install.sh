@@ -65,6 +65,7 @@ Commands:
 Options for 'run':
   -p          Enable protected mode (domain whitelist)
   -t|--teams  Enable Agent Teams (requires cmux)
+  -n LABEL    Set container name label
   -- args     Pass flags through to Claude Code
 
 Examples:
@@ -87,6 +88,7 @@ _cpod_teams_setup() {
   if ! lsof -i ":${cmux_bridge_port}" -sTCP:LISTEN >/dev/null 2>&1; then
     echo "Starting cmux TCP bridge on port ${cmux_bridge_port}..."
     python3 "${CLAUDE_POD_HOME}/scripts/cmux-bridge.py" --port "$cmux_bridge_port" \
+      --project-dir "$project_dir" \
       >"$cmux_bridge_log" 2>&1 &
     CMUX_BRIDGE_PID=$!
     sleep 0.5
